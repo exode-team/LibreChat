@@ -20,7 +20,7 @@ const payload = {
       name: 'Elmir Ismailzada',
       schoolId: 9,
       sellerId: undefined,
-      librechatUserId: 'lc-user-1',
+      libreChatUserId: 'lc-user-1',
     },
     agents: { knowledge: 'agent_router', assistant: 'agent_assist' },
   },
@@ -43,7 +43,7 @@ describe('exode main exchange contract', () => {
 describe('regression', () => {
   it('rejects the pre-fix payload that omitted userId/userUuid', () => {
     const broken = { payload: { ...payload.payload,
-      identity: { subject: 'b'.repeat(64), name: 'X', librechatUserId: 'lc-1' } } };
+      identity: { subject: 'b'.repeat(64), name: 'X', libreChatUserId: 'lc-1' } } };
     expect(exodeMainResponseSchema.safeParse(broken).success).toBe(false);
   });
 });
