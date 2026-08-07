@@ -533,6 +533,7 @@ export function createConversationMethods(
       sortBy = 'updatedAt',
       sortDirection = 'desc',
       projectId,
+      agentId,
     }: {
       cursor?: string | null;
       limit?: number;
@@ -542,6 +543,7 @@ export function createConversationMethods(
       sortBy?: string;
       sortDirection?: string;
       projectId?: string;
+      agentId?: string;
     } = {},
   ) {
     const Conversation = mongoose.models.Conversation as Model<IConversation>;
@@ -564,6 +566,10 @@ export function createConversationMethods(
       } as FilterQuery<IConversation>);
     } else if (projectId) {
       filters.push({ chatProjectId: projectId } as FilterQuery<IConversation>);
+    }
+
+    if (agentId) {
+      filters.push({ agent_id: agentId } as FilterQuery<IConversation>);
     }
 
     filters.push(getVisibleConversationRetentionFilter());

@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useShortcutAriaKey, useShortcutHint } from '~/hooks/useKeyboardShortcuts';
 import { DEFAULT_PANEL, useActivePanel } from '~/Providers';
 import { useLocalize, useNewConvo } from '~/hooks';
+import { useExodeAgentId } from '~/components/Exode';
 import { clearMessagesCache } from '~/utils';
 import store from '~/store';
 
@@ -23,6 +24,8 @@ const NewChatButton = memo(function NewChatButton() {
   const { setActive } = useActivePanel();
   const tooltipDescription = useShortcutHint('newChat', localize('com_ui_new_chat'));
   const ariaKey = useShortcutAriaKey('newChat');
+  const exodeAgentId = useExodeAgentId();
+  const href = exodeAgentId ? `/c/new?agent_id=${encodeURIComponent(exodeAgentId)}` : '/c/new';
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLAnchorElement>) => {
@@ -41,7 +44,7 @@ const NewChatButton = memo(function NewChatButton() {
 
   return (
     <a
-      href="/c/new"
+      href={href}
       data-testid="new-chat-button"
       aria-label={localize('com_ui_new_chat')}
       aria-keyshortcuts={ariaKey}

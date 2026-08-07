@@ -69,6 +69,33 @@ export function useIsExodeEmbed(): boolean {
   return exodeEmbedLatch;
 }
 
+/**
+ * The `agent_id` Bridge.tsx wrote onto the URL after the initial handshake, latched for the
+ * lifetime of the page load.
+ *
+ * Needed for the same reason as the embed latch above: once the user opens an existing
+ * conversation from the sidebar, LibreChat navigates to `/c/<conversationId>` and the query
+ * string is gone. Without latching, the sidebar's own agent filter would lose track of which
+ * agent this embed is scoped to right as soon as a conversation from that same list is opened.
+ */
+let exodeAgentIdLatch: string | undefined;
+
+export function useExodeAgentId(): string | undefined {
+  const location = useLocation();
+  if (exodeAgentIdLatch == null) {
+    const agentId = new URLSearchParams(location.search).get('agent_id');
+    if (agentId) {
+      exodeAgentIdLatch = agentId;
+    }
+  }
+  return exodeAgentIdLatch;
+}
+
+/** Test-only: latched module state needs resetting between cases, same as the embed latch. */
+export function resetExodeAgentIdLatchForTests(): void {
+  exodeAgentIdLatch = undefined;
+}
+
 /** Test-only: the latch is module state, so it survives between cases otherwise. */
 export function resetExodeEmbedLatchForTests(): void {
   exodeEmbedLatch = false;

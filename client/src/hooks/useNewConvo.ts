@@ -251,6 +251,17 @@ const useNewConvo = (index = 0) => {
             nextParams.set('projectId', nextConversation.chatProjectId);
           }
 
+          /**
+           * `agent_id` isn't conversation-scoped like `projectId` above — it's how the exode
+           * embed keeps "New Chat" on the same agent (assistant vs knowledge) the panel opened
+           * with. Dropping it here would silently fall back to the default agent and mix the
+           * new conversation into the wrong mode's history.
+           */
+          const embedAgentId = searchParams.get('agent_id');
+          if (embedAgentId) {
+            nextParams.set('agent_id', embedAgentId);
+          }
+
           const searchParamsString = nextParams.toString();
           return searchParamsString ? `?${searchParamsString}` : '';
         };

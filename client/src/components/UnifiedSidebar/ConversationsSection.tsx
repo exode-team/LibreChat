@@ -17,7 +17,7 @@ import { Conversations } from '~/components/Conversations';
 import ProjectsSection from '~/components/Conversations/ProjectsSection';
 import FavoritesList from '~/components/Nav/Favorites/FavoritesList';
 import SearchBar from '~/components/Nav/SearchBar';
-import { useIsExodeEmbed } from '~/components/Exode';
+import { useIsExodeEmbed, useExodeAgentId } from '~/components/Exode';
 import NewChatButton from './NewChatButton';
 import store from '~/store';
 
@@ -26,6 +26,7 @@ const BookmarkNav = lazy(() => import('~/components/Nav/Bookmarks/BookmarkNav'))
 const ConversationsSection = memo(() => {
   const localize = useLocalize();
   const isExodeEmbed = useIsExodeEmbed();
+  const exodeAgentId = useExodeAgentId();
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
   const setSidebarExpanded = useSetRecoilState(store.sidebarExpanded);
   const { isAuthenticated } = useAuthContext();
@@ -47,6 +48,12 @@ const ConversationsSection = memo(() => {
       {
         tags: tags.length === 0 ? undefined : tags,
         search: search.debouncedQuery || undefined,
+        /**
+         * Scopes the sidebar to the agent this embed opened with, so switching between exode's
+         * "assistant" and "knowledge" modes doesn't mix each mode's conversations into one list
+         * — outside the embed there's no agent to scope to, so this stays undefined.
+         */
+        agentId: isExodeEmbed ? exodeAgentId : undefined,
       },
       {
         enabled: isAuthenticated,
