@@ -534,6 +534,35 @@ export type TLoginResponse = {
   tempToken?: string;
 };
 
+export type TExodeEmbedConfig = {
+  enabled: boolean;
+  protocol: 1;
+  allowedOrigins: string[];
+};
+
+export type TExodeExchangeRequest = {
+  token: string;
+  handshakeId: string;
+  parentOrigin: string;
+  /** Which chat is opening — exode answers with that agent only */
+  kind?: 'Knowledge' | 'Assistant';
+};
+
+export type TExodeExchangeResponse = {
+  token: string;
+  tokenExpiresAt: string;
+  mcpExpiresAt: string;
+  user: TUser;
+  /**
+   * Agents exode provisioned for this principal: `knowledge` routes over the spaces the user
+   * may read, `assistant` is the MCP-enabled general chat. Absent when not configured.
+   */
+  agents?: {
+    knowledge?: string;
+    assistant?: string;
+  };
+};
+
 /** Shared payload for any operation that requires OTP or backup-code verification. */
 export type TOTPVerificationPayload = {
   token?: string;

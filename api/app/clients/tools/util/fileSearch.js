@@ -122,6 +122,12 @@ const createFileSearchTool = async ({ userId, files, entity_id, fileCitations = 
         return body;
       };
 
+      /**
+       * Each result is paired with the file it came from here, at the point the request is made.
+       * Filtering out failures below reindexes the array, so carrying the file alongside its
+       * result is what keeps them associated — recovering it from a positional index afterwards
+       * silently mis-attributes every citation after the first failed query.
+       */
       const queryPromises = files.map((file) =>
         axios
           .post(`${process.env.RAG_API_URL}/query`, createQueryBody(file), {
@@ -130,29 +136,58 @@ const createFileSearchTool = async ({ userId, files, entity_id, fileCitations = 
               'Content-Type': 'application/json',
             },
           })
+          .then((result) => ({ file, result }))
           .catch((error) => {
             logAxiosError({
               message: 'Error encountered in `file_search` while querying file',
               error,
             });
-            return null;
+            return { file, error };
           }),
       );
 
       const results = await Promise.all(queryPromises);
-      const validResults = results.filter((result) => result !== null);
+      const validResults = results.filter((entry) => entry.result != null);
 
       if (validResults.length === 0) {
-        return ['No results found or errors occurred while searching the files.', undefined];
+        /**
+         * Distinguish "the documents do not contain this" from "we could not search them".
+         *
+         * Space agents are instructed to answer only from retrieved documents and to say so
+         * plainly when they find nothing. Reporting a total search failure as "no results" makes
+         * the model state confidently that the answer is absent from the knowledge base, when in
+         * fact nothing was ever read — the worst possible failure for a compliance corpus.
+         *
+         * An HTTP response means the backend is up but rejected every query (e.g. the files were
+         * never embedded) — that is not an outage and retrying will not fix it, so the two cases
+         * get different instructions.
+         */
+        const unreachable = results.every(({ error }) => error?.response == null);
+        if (unreachable) {
+          return [
+            'The document search backend could not be reached, so no documents were searched. ' +
+              'Tell the user the knowledge base is temporarily unavailable. ' +
+              'Do not state or imply that the documents lack the requested information.',
+            undefined,
+          ];
+        }
+
+        return [
+          'Every document query failed, so no documents were searched. ' +
+            'Tell the user their knowledge base files could not be searched and may need to be ' +
+            're-uploaded or re-processed. ' +
+            'Do not state or imply that the documents lack the requested information.',
+          undefined,
+        ];
       }
 
       const formattedResults = validResults
-        .flatMap((result, fileIndex) =>
+        .flatMap(({ file, result }) =>
           result.data.map(([docInfo, distance]) => ({
             filename: docInfo.metadata.source.split('/').pop(),
             content: docInfo.page_content,
             distance,
-            file_id: files[fileIndex]?.file_id,
+            file_id: file?.file_id,
             page: docInfo.metadata.page || null,
           })),
         )

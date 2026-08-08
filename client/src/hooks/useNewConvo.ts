@@ -35,6 +35,7 @@ import {
   logger,
 } from '~/utils';
 import { useDeleteFilesMutation, useGetEndpointsQuery, useGetStartupConfig } from '~/data-provider';
+import { useExodeAgentId } from '~/components/Exode';
 import useGetConversation from './Conversations/useGetConversation';
 import useAssistantListMap from './Assistants/useAssistantListMap';
 import { useResetChatBadges } from './useChatBadges';
@@ -46,6 +47,7 @@ import store from '~/store';
 const useNewConvo = (index = 0) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const latchedExodeAgentId = useExodeAgentId();
   const { data: startupConfig } = useGetStartupConfig();
   const getConversation = useGetConversation(index);
   const applyModelSpecEffects = useApplyModelSpecEffects();
@@ -251,6 +253,17 @@ const useNewConvo = (index = 0) => {
             nextParams.set('projectId', nextConversation.chatProjectId);
           }
 
+          /**
+           * `agent_id` isn't conversation-scoped like `projectId` above — it's how the exode
+           * embed keeps "New Chat" on the same agent (assistant vs knowledge) the panel opened
+           * with. Dropping it here would silently fall back to the default agent and mix the
+           * new conversation into the wrong mode's history.
+           */
+          const embedAgentId = searchParams.get('agent_id') ?? latchedExodeAgentId;
+          if (embedAgentId) {
+            nextParams.set('agent_id', embedAgentId);
+          }
+
           const searchParamsString = nextParams.toString();
           return searchParamsString ? `?${searchParamsString}` : '';
         };
@@ -278,6 +291,7 @@ const useNewConvo = (index = 0) => {
       modelsQuery.data,
       hasAgentAccess,
       searchParams,
+      latchedExodeAgentId,
     ],
   );
 

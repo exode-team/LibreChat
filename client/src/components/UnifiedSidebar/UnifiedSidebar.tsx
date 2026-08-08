@@ -8,6 +8,7 @@ import { ChatContext, ChatFormProvider, ActivePanelProvider } from '~/Providers'
 import useUnifiedSidebarLinks from '~/hooks/Nav/useUnifiedSidebarLinks';
 import { useChatHelpers, useLocalize } from '~/hooks';
 import SidePanelNav from '~/components/SidePanel/Nav';
+import { useIsExodeEmbed } from '~/components/Exode';
 import ExpandedPanel from './ExpandedPanel';
 import Sidebar from './Sidebar';
 import { cn } from '~/utils';
@@ -17,6 +18,15 @@ const COLLAPSED_WIDTH = 52;
 const EXPANDED_MIN = 360;
 const TRANSITION_MS = 300;
 const EASING = 'cubic-bezier(0.2, 0, 0, 1)';
+
+/**
+ * Exode embed only. The sidebar is closed by default and opens on hover, so collapsed is a
+ * narrow strip to aim at rather than the icon rail's width (the rail is hidden in the embed).
+ * Expanded is well under `EXPANDED_MIN`: the assistant iframe is ~26vw of the host page, and
+ * 360px there would leave no room for the conversation it overlays.
+ */
+const EMBED_HOVER_STRIP = 12;
+const EMBED_EXPANDED_WIDTH = 260;
 
 function getInitialWidth(): number {
   const saved = localStorage.getItem('side:width');
@@ -41,8 +51,30 @@ function SidebarChatProvider({ children }: { children: ReactNode }) {
 
 function UnifiedSidebar() {
   const localize = useLocalize();
-  const isSmallScreen = useMediaQuery('(max-width: 768px)');
-  const [expanded, setExpanded] = useRecoilState(store.sidebarExpanded);
+  const mediaQueryIsSmallScreen = useMediaQuery('(max-width: 768px)');
+  const [storedExpanded, setExpanded] = useRecoilState(store.sidebarExpanded);
+  const isExodeEmbed = useIsExodeEmbed();
+  /**
+   * In the embed the sidebar starts closed and opens on hover.
+   *
+   * The iframe is a fraction of the host page (the assistant panel is ~26vw), so a
+   * permanently docked conversation list costs more width than the chat can spare. Hover
+   * is also the only affordance available: the embed hides the icon rail, and with it the
+   * toggle that would otherwise re-open a collapsed sidebar — which is why this cannot
+   * simply reuse the stored collapsed state.
+   */
+  const [hoverExpanded, setHoverExpanded] = useState(false);
+  const expanded = isExodeEmbed ? hoverExpanded : storedExpanded;
+  /**
+   * The embed's own viewport (an iframe sized to a fraction of the host page, e.g. the exode
+   * assistant panel at ~26vw) is narrow enough to trip this media query even on a desktop host
+   * — `(max-width: 768px)` measures the iframe document, not the outer window. Below it falls
+   * into the small-screen branch: a `position: fixed`, `85vw`-wide slide-over drawer plus the
+   * full `ExpandedPanel` icon rail (with `AccountSettings` etc.) that `Sidebar.tsx` already
+   * excludes on the desktop path. Left alone, that drawer fills the entire iframe and duplicates
+   * chrome the embed intentionally hides. The embed always takes the desktop path instead.
+   */
+  const isSmallScreen = isExodeEmbed ? false : mediaQueryIsSmallScreen;
   const [sidebarWidth, setSidebarWidth] = useState(getInitialWidth);
   const [isResizing, setIsResizing] = useState(false);
   const resizeHandlers = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null);
@@ -50,16 +82,24 @@ function UnifiedSidebar() {
   const links = useUnifiedSidebarLinks();
 
   const handleCollapse = useCallback(() => {
+    if (isExodeEmbed) {
+      setHoverExpanded(false);
+      return;
+    }
     startTransition(() => {
       setExpanded(false);
     });
-  }, [setExpanded]);
+  }, [isExodeEmbed, setExpanded]);
 
   const handleExpand = useCallback(() => {
+    if (isExodeEmbed) {
+      setHoverExpanded(true);
+      return;
+    }
     startTransition(() => {
       setExpanded(true);
     });
-  }, [setExpanded]);
+  }, [isExodeEmbed, setExpanded]);
 
   const handleResizeStart = useCallback(() => {
     setIsResizing(true);
@@ -120,7 +160,7 @@ function UnifiedSidebar() {
   }, []);
 
   useEffect(() => {
-    if (!isSmallScreen || !expanded) {
+    if ((!isSmallScreen && !isExodeEmbed) || !expanded) {
       return;
     }
     const handler = (e: KeyboardEvent) => {
@@ -130,7 +170,7 @@ function UnifiedSidebar() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [isSmallScreen, expanded, handleCollapse]);
+  }, [isSmallScreen, isExodeEmbed, expanded, handleCollapse]);
 
   if (isSmallScreen) {
     return (
@@ -178,15 +218,33 @@ function UnifiedSidebar() {
     <SidebarChatProvider>
       <ActivePanelProvider>
         <aside
-          className="relative flex h-full flex-shrink-0 overflow-hidden"
-          style={{
-            width: expanded ? sidebarWidth : COLLAPSED_WIDTH,
-            minWidth: expanded ? EXPANDED_MIN : COLLAPSED_WIDTH,
-            maxWidth: expanded ? '40%' : COLLAPSED_WIDTH,
-            transition: isResizing
-              ? 'none'
-              : `width ${TRANSITION_MS}ms ${EASING}, min-width ${TRANSITION_MS}ms ${EASING}, max-width ${TRANSITION_MS}ms ${EASING}`,
-          }}
+          className={cn(
+            'relative flex h-full flex-shrink-0 overflow-hidden',
+            /* Overlays the chat instead of displacing it: in a narrow iframe, reserving
+               the expanded width would squeeze the conversation to nothing every time
+               the pointer crossed the edge. */
+            isExodeEmbed && 'absolute left-0 top-0 z-[60]',
+            isExodeEmbed && expanded && 'shadow-lg',
+          )}
+          style={
+            isExodeEmbed
+              ? {
+                  /* Collapsed is a thin hover target, not the 52px icon rail — the rail is
+                     hidden here, so a wider strip would just be empty space. */
+                  width: expanded ? EMBED_EXPANDED_WIDTH : EMBED_HOVER_STRIP,
+                  transition: `width ${TRANSITION_MS}ms ${EASING}`,
+                }
+              : {
+                  width: expanded ? sidebarWidth : COLLAPSED_WIDTH,
+                  minWidth: expanded ? EXPANDED_MIN : COLLAPSED_WIDTH,
+                  maxWidth: expanded ? '40%' : COLLAPSED_WIDTH,
+                  transition: isResizing
+                    ? 'none'
+                    : `width ${TRANSITION_MS}ms ${EASING}, min-width ${TRANSITION_MS}ms ${EASING}, max-width ${TRANSITION_MS}ms ${EASING}`,
+                }
+          }
+          onMouseEnter={isExodeEmbed ? () => setHoverExpanded(true) : undefined}
+          onMouseLeave={isExodeEmbed ? () => setHoverExpanded(false) : undefined}
           aria-label={localize('com_nav_control_panel')}
         >
           <Sidebar

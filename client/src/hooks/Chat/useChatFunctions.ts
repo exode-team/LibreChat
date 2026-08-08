@@ -401,8 +401,24 @@ export default function useChatFunctions({
       parentMessageId = Constants.NO_PARENT;
       currentMessages = [];
       conversationId = null;
-      const projectSearch = chatProjectId ? `?projectId=${encodeURIComponent(chatProjectId)}` : '';
-      navigate(`/c/new${projectSearch}`, { state: { focusChat: true } });
+      const nextParams = new URLSearchParams();
+      if (chatProjectId) {
+        nextParams.set('projectId', chatProjectId);
+      }
+      const currentParams = new URLSearchParams(window.location.search);
+      if (currentParams.get('embed') === 'exode') {
+        nextParams.set('embed', 'exode');
+      }
+      /**
+       * The exode embed scopes its sidebar history to this agent — dropping it here would file
+       * the conversation under the default agent and hide it from the embed's list.
+       */
+      const embedAgentId = currentParams.get('agent_id');
+      if (embedAgentId) {
+        nextParams.set('agent_id', embedAgentId);
+      }
+      const nextSearch = nextParams.size > 0 ? `?${nextParams.toString()}` : '';
+      navigate(`/c/new${nextSearch}`, { state: { focusChat: true } });
     }
 
     const targetParentMessageId = isRegenerate ? messageId : latestMessage?.parentMessageId;

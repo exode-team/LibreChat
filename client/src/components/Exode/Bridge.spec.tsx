@@ -2,6 +2,7 @@ import { act, render, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { useExodeExchangeMutation, useExodeEmbedConfigQuery } from '~/data-provider/Auth';
+import { resetExodeAgentKindLatchForTests } from './protocol';
 import ExodeBridge from './Bridge';
 
 /** ExodeBridge calls useNavigate, so it needs a router just as it has one in the app */
@@ -69,6 +70,7 @@ describe('ExodeBridge', () => {
     mockNavigate.mockReset();
     acceptExternalSession.mockReset();
     clearExternalSession.mockReset();
+    resetExodeAgentKindLatchForTests();
     window.history.replaceState({}, '', '/c/new?embed=exode');
     mockedUseExodeEmbedConfigQuery.mockReturnValue({
       data: { enabled: true, protocol: 1, allowedOrigins: [allowedOrigin] },
@@ -233,9 +235,12 @@ describe('ExodeBridge', () => {
     );
 
     await waitFor(() =>
-      expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining('agent_id=agent-assistant'), {
-        replace: true,
-      }),
+      expect(mockNavigate).toHaveBeenCalledWith(
+        expect.stringContaining('agent_id=agent-assistant'),
+        {
+          replace: true,
+        },
+      ),
     );
   });
 
@@ -279,7 +284,10 @@ describe('ExodeBridge', () => {
        * it actually posted — replying with the initial pair would just be ignored.
        */
       const refresh = postMessageSpy.mock.calls
-        .map(([message]) => message as { type: string; requestId: string; payload: { handshakeId: string } })
+        .map(
+          ([message]) =>
+            message as { type: string; requestId: string; payload: { handshakeId: string } },
+        )
         .find(({ type }) => type === 'exode-ai-chat:refresh-required');
 
       expect(refresh).toBeDefined();

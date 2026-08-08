@@ -29,21 +29,31 @@ const payload = {
 describe('exode main exchange contract', () => {
   it('accepts what exode-main actually sends', () => {
     const parsed = exodeMainResponseSchema.safeParse(payload);
-    if (!parsed.success) { console.error(JSON.stringify(parsed.error.issues, null, 2)); }
+    if (!parsed.success) {
+      console.error(JSON.stringify(parsed.error.issues, null, 2));
+    }
     expect(parsed.success).toBe(true);
   });
 
   it('still accepts a user with no profile name via the uuid fallback', () => {
-    const p = { payload: { ...payload.payload,
-      identity: { ...payload.payload.identity, name: '3f2504e0-4f89-41d3-9a0c-0305e82c3301' } } };
+    const p = {
+      payload: {
+        ...payload.payload,
+        identity: { ...payload.payload.identity, name: '3f2504e0-4f89-41d3-9a0c-0305e82c3301' },
+      },
+    };
     expect(exodeMainResponseSchema.safeParse(p).success).toBe(true);
   });
 });
 
 describe('regression', () => {
   it('rejects the pre-fix payload that omitted userId/userUuid', () => {
-    const broken = { payload: { ...payload.payload,
-      identity: { subject: 'b'.repeat(64), name: 'X', libreChatUserId: 'lc-1' } } };
+    const broken = {
+      payload: {
+        ...payload.payload,
+        identity: { subject: 'b'.repeat(64), name: 'X', libreChatUserId: 'lc-1' },
+      },
+    };
     expect(exodeMainResponseSchema.safeParse(broken).success).toBe(false);
   });
 });

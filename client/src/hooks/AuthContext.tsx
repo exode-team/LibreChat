@@ -8,7 +8,8 @@ import {
   createContext,
 } from 'react';
 import { debounce } from 'lodash';
-import { useRecoilState, useSetRecoilState } from 'recoil';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRecoilState, useResetRecoilState, useSetRecoilState } from 'recoil';
 import { useNavigate } from 'react-router-dom';
 import {
   apiBaseUrl,
@@ -26,8 +27,21 @@ import {
   useLogoutUserMutation,
   useRefreshTokenMutation,
 } from '~/data-provider';
-import { TAuthConfig, TUserContext, TAuthContext, TResError } from '~/common';
-import { SESSION_KEY, isSafeRedirect, getPostLoginRedirect } from '~/utils';
+import type {
+  TAuthConfig,
+  TUserContext,
+  TAuthContext,
+  TExternalSession,
+  TResError,
+} from '~/common';
+import {
+  SESSION_KEY,
+  isSafeRedirect,
+  getPostLoginRedirect,
+  clearAllConversationStorage,
+} from '~/utils';
+import { EXODE_SESSION_EXPIRED_EVENT } from '~/components/Exode/protocol';
+import { useClearStates } from '~/hooks/Config';
 import useTimeout from './useTimeout';
 import store from '~/store';
 
@@ -45,12 +59,19 @@ const AuthContextProvider = ({
   children: ReactNode;
 }) => {
   const isExternalRedirectRef = useRef(false);
+  const embeddedRef = useRef(authConfig?.embedded === true);
+  embeddedRef.current = authConfig?.embedded === true;
   const [user, setUser] = useRecoilState(store.user);
   const logoutRedirectRef = useRef<string | undefined>(undefined);
   const [token, setToken] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const setQueriesEnabled = useSetRecoilState<boolean>(store.queriesEnabled);
+
+  /** Used by clearExternalSession to tear down as thoroughly as logout does */
+  const queryClient = useQueryClient();
+  const clearStates = useClearStates();
+  const resetDefaultPreset = useResetRecoilState(store.defaultPreset);
 
   const userRoleName = user?.role ?? '';
   const isCustomRole = isAuthenticated && !!user?.role && !isSystemRoleName(user.role);
@@ -99,6 +120,40 @@ const AuthContextProvider = ({
     [navigate, setUser, setQueriesEnabled],
   );
   const doSetError = useTimeout({ callback: (error) => setError(error as string | undefined) });
+
+  const acceptExternalSession = useCallback(
+    (session: TExternalSession) => {
+      setError(undefined);
+      setUserContext({
+        token: session.token,
+        user: session.user,
+        isAuthenticated: true,
+      });
+    },
+    [setUserContext],
+  );
+
+  /**
+   * Tear down an externally-supplied session.
+   *
+   * Clears the same state `logout` does. Dropping only the token would leave the previous
+   * principal's conversations in local storage and their responses in the query cache — and the
+   * embed can switch principal in place (a different school, or a different user in a shared
+   * browser) without a page load, so the next session would render the previous one's data.
+   */
+  const clearExternalSession = useCallback(() => {
+    setTokenHeader(undefined);
+    setQueriesEnabled(false);
+    resetDefaultPreset();
+    clearStates();
+    clearAllConversationStorage();
+    queryClient.removeQueries();
+    setUserContext({
+      token: undefined,
+      user: undefined,
+      isAuthenticated: false,
+    });
+  }, [clearStates, queryClient, resetDefaultPreset, setQueriesEnabled, setUserContext]);
 
   const loginUser = useLoginUserMutation({
     onSuccess: (data: t.TLoginResponse) => {
@@ -172,6 +227,9 @@ const AuthContextProvider = ({
   };
 
   const silentRefresh = useCallback(() => {
+    if (embeddedRef.current) {
+      return;
+    }
     if (authConfig?.test === true) {
       console.log('Test mode. Skipping silent refresh.');
       return;
@@ -229,7 +287,16 @@ const AuthContextProvider = ({
       setUser(userQuery.data);
     } else if (userQuery.isError) {
       doSetError((userQuery.error as Error).message);
-      navigate(buildLoginRedirectUrl(), { replace: true });
+      if (embeddedRef.current) {
+        /**
+         * The embed has no login page to land on — Login/Startup render nothing for an
+         * unauthenticated embed. Hand the failure to ExodeBridge instead, which asks the host
+         * for a fresh bootstrap token.
+         */
+        window.dispatchEvent(new Event(EXODE_SESSION_EXPIRED_EVENT));
+      } else {
+        navigate(buildLoginRedirectUrl(), { replace: true });
+      }
     }
     if (error != null && error && isAuthenticated) {
       doSetError(undefined);
@@ -274,6 +341,8 @@ const AuthContextProvider = ({
       error,
       login,
       logout,
+      acceptExternalSession,
+      clearExternalSession,
       setError,
       roles: {
         [SystemRoles.USER]: userRole,
@@ -293,6 +362,8 @@ const AuthContextProvider = ({
       isCustomRole,
       userRoleName,
       customRole,
+      acceptExternalSession,
+      clearExternalSession,
     ],
   );
 

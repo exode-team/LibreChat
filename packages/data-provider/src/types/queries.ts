@@ -20,6 +20,7 @@ export type ConversationListParams = {
   tags?: string[];
   search?: string;
   projectId?: string;
+  agentId?: string;
 };
 
 export type MinimalConversation = Pick<

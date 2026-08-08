@@ -1,4 +1,5 @@
-import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
+import { useRef } from 'react';
+import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom';
 import {
   Login,
   VerifyEmail,
@@ -12,6 +13,7 @@ import { MarketplaceProvider } from '~/components/Agents/MarketplaceContext';
 import AgentMarketplace from '~/components/Agents/Marketplace';
 import { OAuthSuccess, OAuthError } from '~/components/OAuth';
 import { AuthContextProvider } from '~/hooks/AuthContext';
+import { ExodeBridge, shouldLatchExodeEmbed } from '~/components/Exode';
 import WithRum from '~/lib/rum/WithRum';
 import RouteErrorBoundary from './RouteErrorBoundary';
 import StartupLayout from './Layouts/Startup';
@@ -22,14 +24,37 @@ import ChatRoute from './ChatRoute';
 import Search from './Search';
 import Root from './Root';
 
-const AuthLayout = () => (
-  <AuthContextProvider>
-    <WithRum>
+const AuthLayout = () => {
+  const location = useLocation();
+
+  /**
+   * Sticky for the lifetime of the page load, deliberately.
+   *
+   * Derived fresh from the URL, this flips to false the moment the app navigates somewhere
+   * without `?embed=exode` — which unmounts ExodeBridge, whose cleanup clears the session, so
+   * sending the very first message logged the user out and left a blank frame with no way back.
+   * An embedded session stays embedded until the iframe is reloaded; a normal page load never
+   * becomes one, since this only ever latches on.
+   */
+  const embeddedRef = useRef(false);
+  embeddedRef.current =
+    embeddedRef.current || shouldLatchExodeEmbed(location.pathname, location.search);
+  const embedded = embeddedRef.current;
+  const content = embedded ? (
+    <ExodeBridge>
       <Outlet />
-    </WithRum>
-    <ApiErrorWatcher />
-  </AuthContextProvider>
-);
+    </ExodeBridge>
+  ) : (
+    <Outlet />
+  );
+
+  return (
+    <AuthContextProvider authConfig={{ loginRedirect: '/login', embedded }}>
+      <WithRum>{content}</WithRum>
+      <ApiErrorWatcher />
+    </AuthContextProvider>
+  );
+};
 
 const loadInlinePromptsView = () =>
   import('~/components/Prompts/layouts/InlinePromptsView').then((m) => ({
@@ -103,6 +128,10 @@ export const router = createBrowserRouter(
       element: <AuthLayout />,
       errorElement: <RouteErrorBoundary />,
       children: [
+        {
+          path: 'embed/exode',
+          element: <Navigate to="/c/new?embed=exode" replace={true} />,
+        },
         {
           path: '/',
           element: <LoginLayout />,
