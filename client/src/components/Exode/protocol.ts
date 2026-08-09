@@ -30,10 +30,32 @@ const logoutSchema = envelopeSchema.extend({
   payload: z.object({}).optional(),
 });
 
+/** Only ever a CSS colour, and only from the host — never interpolated as markup. */
+export const EXODE_ACCENT_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+/**
+ * The host's colour scheme, pushed instead of being carried in the URL.
+ *
+ * The theme changes while the frame is alive — the user flips it in exode, or the school is
+ * rebranded — and a query param would mean a new `src`, i.e. a reload that throws away the open
+ * conversation. The initial values still ride in the URL (`?accent=`, `?scheme=`), because they
+ * have to be known before first paint; everything after that arrives here.
+ */
+const themeSchema = envelopeSchema.extend({
+  type: z.literal('exode-ai-chat:theme'),
+  payload: z.object({
+    scheme: z.enum(['light', 'dark']),
+    accent: z.string().regex(EXODE_ACCENT_PATTERN).optional(),
+  }),
+});
+
 export const exodeHostMessageSchema = z.discriminatedUnion('type', [
   authenticateSchema,
   logoutSchema,
+  themeSchema,
 ]);
+
+export type ExodeHostTheme = z.infer<typeof themeSchema>['payload'];
 
 export type ExodeHostMessage = z.infer<typeof exodeHostMessageSchema>;
 

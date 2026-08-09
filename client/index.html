@@ -28,6 +28,29 @@
       }
     </style>
     <script>
+      /*
+       * Exode embed: the host owns the colour scheme, so adopt it before React boots. Without
+       * this the stored (or system) theme paints first and the bridge's push flips the whole
+       * frame in front of the user a moment later.
+       *
+       * Only inside the host's iframe and only alongside the embed marker: a crafted `?scheme=`
+       * opened in a normal tab must not rewrite a regular user's saved theme.
+       */
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const scheme = params.get('scheme');
+
+        if (
+          params.get('embed') === 'exode' &&
+          window.self !== window.top &&
+          (scheme === 'dark' || scheme === 'light')
+        ) {
+          localStorage.setItem('color-theme', scheme);
+        }
+      } catch (e) {
+        /* localStorage unavailable — fall through to the stored/system theme */
+      }
+
       const theme = localStorage.getItem('color-theme');
       const loadingContainerStyle = document.createElement('style');
       let backgroundColor;

@@ -1,8 +1,18 @@
 import { useEffect } from 'react';
-import { useIsExodeEmbed } from './protocol';
+import { EXODE_ACCENT_PATTERN, useIsExodeEmbed } from './protocol';
 
-/** Only ever a CSS colour, and only from the host's own URL — never interpolated as markup. */
-const SAFE_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+/**
+ * Applies the school's accent to the embedded chat.
+ *
+ * Exported because the bridge repeats it on every `exode-ai-chat:theme` push: the accent is
+ * per-school and can change while the frame is alive, and it lives in an inline variable rather
+ * than in `exode-theme.css`, which only carries the default.
+ */
+export function applyExodeAccent(accent: string | null | undefined): void {
+  if (accent != null && EXODE_ACCENT_PATTERN.test(accent)) {
+    document.documentElement.style.setProperty('--exode-accent', accent);
+  }
+}
 
 /**
  * Applies exode's design tokens to the embedded chat.
@@ -14,7 +24,7 @@ const SAFE_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
  * `SchoolStore.preferences.colorVariables`), so it cannot live in the stylesheet:
  * the host forwards it as `?accent=%23fa6c1c` and it is set as an inline
  * variable here. Anything that is not a plain hex colour is ignored, leaving the
- * stylesheet's default.
+ * stylesheet's default. Later changes arrive over the bridge, not in the URL.
  */
 export function useExodeTheme(): void {
   const isExodeEmbed = useIsExodeEmbed();
@@ -24,13 +34,9 @@ export function useExodeTheme(): void {
       return;
     }
 
-    const root = document.documentElement;
-    root.setAttribute('data-exode-embed', '');
+    document.documentElement.setAttribute('data-exode-embed', '');
 
-    const accent = new URLSearchParams(window.location.search).get('accent');
-    if (accent != null && SAFE_COLOR.test(accent)) {
-      root.style.setProperty('--exode-accent', accent);
-    }
+    applyExodeAccent(new URLSearchParams(window.location.search).get('accent'));
 
     /* No cleanup that removes the attribute: the latch means an embedded page
        stays embedded for its whole life, and tearing the theme down on an

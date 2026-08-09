@@ -1,9 +1,11 @@
-import { useEffect } from 'react';
+import { useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ThemeContext } from '@librechat/client';
 import type { ReactNode } from 'react';
 import type { TExodeExchangeResponse } from 'librechat-data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { useExodeExchangeMutation, useExodeEmbedConfigQuery } from '~/data-provider/Auth';
+import { applyExodeAccent } from './useExodeTheme';
 import {
   EXODE_EMBED_PROTOCOL,
   EXODE_SESSION_EXPIRED_EVENT,
@@ -69,6 +71,7 @@ const HANDSHAKE_RETRY_DELAY_MS = 5_000;
 
 export default function ExodeBridge({ children }: ExodeBridgeProps) {
   const navigate = useNavigate();
+  const { setTheme } = useContext(ThemeContext);
   const { data: config } = useExodeEmbedConfigQuery();
   const { mutateAsync: exchange } = useExodeExchangeMutation();
   const { acceptExternalSession, clearExternalSession } = useAuthContext();
@@ -175,6 +178,18 @@ export default function ExodeBridge({ children }: ExodeBridgeProps) {
       }
 
       const message = parsed.data;
+      if (message.type === 'exode-ai-chat:theme') {
+        /**
+         * Persisted through ThemeProvider rather than by toggling the class directly: its own
+         * effect re-applies the class from state, so a direct toggle would be undone by the next
+         * render. Writing `color-theme` also fixes the reload flash — the pre-React bootstrap in
+         * index.html reads that key, so a dark host no longer flashes light on refresh.
+         */
+        setTheme(message.payload.scheme);
+        applyExodeAccent(message.payload.accent);
+        return;
+      }
+
       if (message.type === 'exode-ai-chat:logout') {
         if (refreshTimer != null) {
           window.clearTimeout(refreshTimer);
@@ -288,7 +303,7 @@ export default function ExodeBridge({ children }: ExodeBridgeProps) {
       }
       clearExternalSession();
     };
-  }, [acceptExternalSession, clearExternalSession, config, exchange, navigate]);
+  }, [acceptExternalSession, clearExternalSession, config, exchange, navigate, setTheme]);
 
   return children;
 }
