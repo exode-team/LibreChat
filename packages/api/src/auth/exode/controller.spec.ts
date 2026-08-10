@@ -5,9 +5,17 @@ import type { ExodeExchangeDeps } from './controller';
 import { createExodeExchangeController } from './controller';
 
 jest.mock('@librechat/data-schemas', () => ({ logger: { error: jest.fn() } }), { virtual: true });
-jest.mock('librechat-data-provider', () => ({ SystemRoles: { USER: 'USER' } }), {
-  virtual: true,
-});
+/* The origin matcher comes from the real module rather than a stub: it is the gate this suite
+ * exercises, and a hand-written copy here would keep passing after the shared rule changed. */
+jest.mock(
+  'librechat-data-provider',
+  () => ({
+    SystemRoles: { USER: 'USER' },
+    isAllowedExodeOrigin: jest.requireActual('../../../../data-provider/src/exode')
+      .isAllowedExodeOrigin,
+  }),
+  { virtual: true },
+);
 jest.mock('~/auth/openid', () => ({
   normalizeOpenIdIssuer: (issuer?: string) => issuer?.trim().replace(/\/+$/, '') || undefined,
 }));

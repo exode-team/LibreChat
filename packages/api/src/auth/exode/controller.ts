@@ -5,7 +5,9 @@ import type { RequestHandler } from 'express';
 import type { ExodeUserDeps } from './user';
 import type { ExodeExchangeResponse } from './types';
 import type { Fetch } from './client';
+import type { ExodeAuthConfig } from './config';
 import { getExodeAuthConfig, getExodeEmbedConfig, EXODE_MCP_AUTH_FIELD } from './config';
+import { isEmbeddableExodeOrigin } from './origins';
 import { exchangeExodeBootstrap } from './client';
 import { exodeExchangeInputSchema, ExodeExchangeError } from './types';
 import { serializeExodeUser, upsertExodeUser } from './user';
@@ -34,14 +36,27 @@ export interface ExodeExchangeDeps extends ExodeUserDeps {
   now?: () => number;
 }
 
-function normalizeAndAuthorizeOrigin(origin: string, allowedOrigins: string[]): string {
+/**
+ * Reject an origin that is neither configured here nor known to main.
+ *
+ * Kept even though main re-checks the origin during the exchange, and checks it harder — it
+ * binds the origin to the one school the token was minted for, which this cannot do without the
+ * token's claims. The point of keeping a gate here is version skew: the two services deploy
+ * separately, so this must not stop refusing strangers merely because a main that also refuses
+ * them has not shipped yet.
+ */
+async function normalizeAndAuthorizeOrigin(
+  origin: string,
+  config: ExodeAuthConfig,
+  fetcher?: Fetch,
+): Promise<string> {
   let normalized: string;
   try {
     normalized = new URL(origin).origin;
   } catch {
     throw new ExodeExchangeError('INVALID_HANDSHAKE', 400, 'Invalid parent origin');
   }
-  if (normalized !== origin || !allowedOrigins.includes(normalized)) {
+  if (normalized !== origin || !(await isEmbeddableExodeOrigin(normalized, config, fetcher))) {
     throw new ExodeExchangeError('INVALID_HANDSHAKE', 400, 'Parent origin is not allowed');
   }
   return normalized;
@@ -72,9 +87,10 @@ export function createExodeExchangeController(deps: ExodeExchangeDeps): RequestH
 
     try {
       const config = getExodeAuthConfig();
-      const parentOrigin = normalizeAndAuthorizeOrigin(
+      const parentOrigin = await normalizeAndAuthorizeOrigin(
         parsed.data.parentOrigin,
-        config.allowedOrigins,
+        config,
+        deps.fetcher,
       );
       const exchange = await exchangeExodeBootstrap(
         { ...parsed.data, parentOrigin },

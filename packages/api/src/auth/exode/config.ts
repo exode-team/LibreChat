@@ -29,7 +29,37 @@ function normalizeOrigin(value: string): string {
   if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
     throw new Error('Exode embed origins must contain only scheme, host, and port');
   }
+  assertUsableWildcard(url.hostname);
   return url.origin;
+}
+
+/**
+ * A `*.` host is allowed — it is how a deployment covers every school subdomain without
+ * enumerating them — but only where the wildcard cannot swallow a public suffix. `*.example.com`
+ * is a domain someone owns; `*.com`, or a bare `*`, would hand embed permission to the whole
+ * internet. Requiring two labels is the cheapest guard that separates the two without shipping a
+ * public-suffix list, and it runs at config load so a typo fails on boot instead of silently
+ * widening who may frame the chat.
+ */
+function assertUsableWildcard(hostname: string): void {
+  if (!hostname.startsWith('*.')) {
+    if (hostname.includes('*')) {
+      throw new Error('An Exode embed origin may only use `*` as a leading `*.` host label');
+    }
+    return;
+  }
+
+  const base = hostname.slice(2);
+
+  if (base.includes('*')) {
+    throw new Error('An Exode embed origin may only use `*` as a leading `*.` host label');
+  }
+
+  if (base.split('.').filter(Boolean).length < 2) {
+    throw new Error(
+      `Exode embed origin '*.${base}' is too broad — a wildcard needs at least two host labels`,
+    );
+  }
 }
 
 function readAllowedOrigins(): string[] {

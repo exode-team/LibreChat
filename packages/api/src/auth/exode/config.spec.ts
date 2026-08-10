@@ -57,6 +57,25 @@ describe('Exode auth config', () => {
     expect(() => getExodeAuthConfig()).toThrow('between 60000 and 900000');
   });
 
+  it('keeps a wildcard host verbatim so CSP receives it as written', () => {
+    process.env.EXODE_EMBED_ORIGINS = 'https://staging.exode.biz, https://*.staging.exode.biz';
+    expect(getExodeAuthConfig().allowedOrigins).toEqual([
+      'https://staging.exode.biz',
+      'https://*.staging.exode.biz',
+    ]);
+    expect(getExodeFrameAncestors()).toBe('https://staging.exode.biz https://*.staging.exode.biz');
+  });
+
+  it('rejects a wildcard broad enough to cover a public suffix', () => {
+    process.env.EXODE_EMBED_ORIGINS = 'https://*.biz';
+    expect(() => getExodeAuthConfig()).toThrow('at least two host labels');
+  });
+
+  it('rejects a `*` used anywhere but as the leading host label', () => {
+    process.env.EXODE_EMBED_ORIGINS = 'https://staging.*.exode.biz';
+    expect(() => getExodeAuthConfig()).toThrow('leading `*.` host label');
+  });
+
   it('recognizes only the dedicated path or query marker', () => {
     expect(isExodeEmbedRequest('/embed/exode')).toBe(true);
     expect(isExodeEmbedRequest('/c/new', 'exode')).toBe(true);

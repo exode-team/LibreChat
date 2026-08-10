@@ -1,6 +1,7 @@
 import { useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ThemeContext } from '@librechat/client';
+import { isAllowedExodeOrigin, resolveExodeTargetOrigins } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { TExodeExchangeResponse } from 'librechat-data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
@@ -81,7 +82,12 @@ export default function ExodeBridge({ children }: ExodeBridgeProps) {
       return;
     }
 
-    const allowedOrigins = new Set(config.allowedOrigins);
+    /**
+     * Resolved once per mount: `postMessage` rejects a wildcard as a target, so before a
+     * handshake pins down `activeOrigin` the parent is taken from the referrer (checked against
+     * the allow-list) and only falls back to broadcasting the exact entries.
+     */
+    const initialTargets = resolveExodeTargetOrigins(config.allowedOrigins, document.referrer);
     let activeOrigin: string | undefined;
     let currentHandshake: Handshake | undefined;
     let refreshTimer: number | undefined;
@@ -90,7 +96,7 @@ export default function ExodeBridge({ children }: ExodeBridgeProps) {
     let exchangeInFlight = false;
 
     const post = (message: ExodeBridgeMessage, origin?: string) => {
-      const targets = origin ? [origin] : config.allowedOrigins;
+      const targets = origin ? [origin] : initialTargets;
       for (const targetOrigin of targets) {
         window.parent.postMessage(message, targetOrigin);
       }
@@ -168,7 +174,10 @@ export default function ExodeBridge({ children }: ExodeBridgeProps) {
     };
 
     const handleMessage = async (event: MessageEvent) => {
-      if (event.source !== window.parent || !allowedOrigins.has(event.origin)) {
+      if (
+        event.source !== window.parent ||
+        !isAllowedExodeOrigin(event.origin, config.allowedOrigins)
+      ) {
         return;
       }
 
