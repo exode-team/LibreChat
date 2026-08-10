@@ -3,7 +3,10 @@ import { createContext, useCallback, useContext, useMemo, useState, ReactNode } 
 const STORAGE_KEY = 'side:active-panel';
 export const DEFAULT_PANEL = 'conversations';
 
-function getInitialActivePanel(): string {
+function getInitialActivePanel(isEmbed: boolean): string {
+  if (isEmbed) {
+    return DEFAULT_PANEL;
+  }
   const saved = localStorage.getItem(STORAGE_KEY);
   return saved ? saved : DEFAULT_PANEL;
 }
@@ -15,13 +18,30 @@ interface ActivePanelContextType {
 
 const ActivePanelContext = createContext<ActivePanelContextType | undefined>(undefined);
 
-export function ActivePanelProvider({ children }: { children: ReactNode }) {
-  const [active, _setActive] = useState<string>(getInitialActivePanel);
+/**
+ * `isEmbed` opts the exode embed out of the shared `side:active-panel` localStorage key.
+ * The embed and the main LibreChat app run on the same origin, so without this the embed's
+ * default panel is whatever was last open in the main app (e.g. Memories) — even though the
+ * embed hides the icon rail that would let a user navigate there themselves.
+ */
+export function ActivePanelProvider({
+  children,
+  isEmbed = false,
+}: {
+  children: ReactNode;
+  isEmbed?: boolean;
+}) {
+  const [active, _setActive] = useState<string>(() => getInitialActivePanel(isEmbed));
 
-  const setActive = useCallback((id: string) => {
-    localStorage.setItem(STORAGE_KEY, id);
-    _setActive(id);
-  }, []);
+  const setActive = useCallback(
+    (id: string) => {
+      if (!isEmbed) {
+        localStorage.setItem(STORAGE_KEY, id);
+      }
+      _setActive(id);
+    },
+    [isEmbed],
+  );
 
   const value = useMemo(() => ({ active, setActive }), [active, setActive]);
 

@@ -61,6 +61,27 @@ describe('ActivePanelContext', () => {
     );
     spy.mockRestore();
   });
+
+  it('ignores a stale localStorage value and defaults to conversations when embedded', () => {
+    localStorage.setItem(STORAGE_KEY, 'memories');
+    render(
+      <ActivePanelProvider isEmbed>
+        <TestConsumer />
+      </ActivePanelProvider>,
+    );
+    expect(screen.getByTestId('active')).toHaveTextContent('conversations');
+  });
+
+  it('does not persist panel switches to localStorage when embedded', () => {
+    render(
+      <ActivePanelProvider isEmbed>
+        <TestConsumer />
+      </ActivePanelProvider>,
+    );
+    fireEvent.click(screen.getByTestId('switch-btn'));
+    expect(screen.getByTestId('active')).toHaveTextContent('bookmarks');
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
 });
 
 describe('resolveActivePanel', () => {

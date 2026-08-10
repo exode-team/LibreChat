@@ -187,7 +187,7 @@ function UnifiedSidebar() {
           inert={!expanded ? '' : undefined}
         >
           <SidebarChatProvider>
-            <ActivePanelProvider>
+            <ActivePanelProvider isEmbed={isExodeEmbed}>
               <ExpandedPanel links={links} onCollapse={handleCollapse} />
               <nav className="min-h-0 flex-1 overflow-hidden bg-surface-primary-alt">
                 <SidePanelNav links={links} />
@@ -216,7 +216,7 @@ function UnifiedSidebar() {
 
   return (
     <SidebarChatProvider>
-      <ActivePanelProvider>
+      <ActivePanelProvider isEmbed={isExodeEmbed}>
         <aside
           className={cn(
             'relative flex h-full flex-shrink-0 overflow-hidden',

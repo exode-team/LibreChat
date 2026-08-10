@@ -199,6 +199,19 @@ const useNewConvo = (index = 0) => {
             conversation.assistant_id = undefined;
           }
 
+          /**
+           * Same handoff as `assistant_id` above, but for the agents endpoint: the exode
+           * embed's "New Chat" carries `agent_id` in the URL (see `getParams` below) so it
+           * stays pinned to the same agent, but nothing else copies that URL value onto the
+           * conversation object before it's used to build the request body —
+           * `useQueryParams` only reprocesses the URL once per page load, so every "New Chat"
+           * after the first left `agent_id` unset and the server rejected the message with
+           * "agent_id is required in request body".
+           */
+          if (isAgentsEndpoint(defaultEndpoint) && !conversation.agent_id && latchedExodeAgentId) {
+            conversation.agent_id = latchedExodeAgentId;
+          }
+
           const models = modelsConfig?.[defaultEndpoint] ?? [];
           const defaultParamsEndpoint = getDefaultParamsEndpoint(endpointsConfig, defaultEndpoint);
           conversation = buildDefaultConvo({
