@@ -20,6 +20,16 @@ function mapUpstreamStatus(status: number): ExodeExchangeError {
   return new ExodeExchangeError('EXODE_UNAVAILABLE', 502, 'Exode authentication is unavailable');
 }
 
+/**
+ * Generous because this call is not a lookup — it is the whole provisioning chain.
+ *
+ * Main answers an exchange by asking ms-ai to provision the principal's agents, and ms-ai in
+ * turn drives LibreChat's own REST API to create them. On a first-time user that is several
+ * round trips, and the old 5s budget cut it off midway: the frame saw `EXODE_UNAVAILABLE`
+ * while main was still working, and the agent it was creating was orphaned.
+ */
+const EXCHANGE_TIMEOUT_MS = 30_000;
+
 export async function exchangeExodeBootstrap(
   input: ExodeExchangeInput,
   config: ExodeAuthConfig,
@@ -37,7 +47,7 @@ export async function exchangeExodeBootstrap(
         'x-service-secret': config.serviceSecret,
       },
       body: JSON.stringify(input),
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(EXCHANGE_TIMEOUT_MS),
     });
   } catch (error) {
     /**
