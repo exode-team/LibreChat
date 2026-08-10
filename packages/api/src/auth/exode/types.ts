@@ -53,14 +53,31 @@ export const exodeExchangeInputSchema: z.ZodType<ExodeExchangeInput> = z
   })
   .strict();
 
-export const exodeMainResponseSchema: z.ZodType<{ payload: ExodeMainExchange }> = z.object({
+/**
+ * Validate what the session actually depends on, and no more.
+ *
+ * Every field here is one exode may change without telling this service, and a rejection is
+ * total — the user gets no chat at all. So the rule is: guard what would corrupt a session if
+ * wrong (the identity we key the account on, the token, its expiry), and stay out of the way of
+ * everything cosmetic. `userUuid` learned this the hard way: it was declared a UUID, exode
+ * issues short ids like `RNzffmwSR1mQ`, and every single exchange failed on a field this
+ * service only ever passes through.
+ */
+export const exodeMainResponseSchema: z.ZodType<
+  { payload: ExodeMainExchange },
+  z.ZodTypeDef,
+  unknown
+> = z.object({
   payload: z.object({
     identity: z.object({
+      /** Keys the LibreChat account (`openidId`) — a wrong value hands over the wrong session */
       subject: z.string().min(16).max(256),
       userId: z.number().int().positive(),
-      userUuid: z.string().uuid(),
-      name: z.string().min(1).max(256),
-      avatar: z.string().url().max(2_048).optional(),
+      userUuid: z.string().min(1).max(128),
+      /** Display-only, and exode does not guarantee it is set */
+      name: z.string().max(256).catch(''),
+      /** Cosmetic: a malformed avatar drops to none rather than costing the user their chat */
+      avatar: z.string().max(2_048).url().optional().catch(undefined),
       schoolId: z.number().int().positive().optional(),
       sellerId: z.number().int().positive().optional(),
     }),

@@ -8,15 +8,20 @@
  */
 import { exodeMainResponseSchema } from './types';
 
-/** Exactly what exode-main's knowledge-chat.controller now returns */
+/**
+ * Exactly what exode-main's knowledge-chat.controller now returns.
+ *
+ * `userUuid` is a short id, not a UUID — copied from a live staging token. The name misleads,
+ * and the schema believed it: `z.string().uuid()` rejected every real exchange.
+ */
 const payload = {
   payload: {
     token: 'a'.repeat(64),
     expiresAt: new Date().toISOString(),
     identity: {
       subject: 'b'.repeat(64),
-      userId: 42,
-      userUuid: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+      userId: 1798,
+      userUuid: 'RNzffmwSR1mQ',
       name: 'Elmir Ismailzada',
       schoolId: 9,
       sellerId: undefined,
@@ -43,6 +48,37 @@ describe('exode main exchange contract', () => {
       },
     };
     expect(exodeMainResponseSchema.safeParse(p).success).toBe(true);
+  });
+
+  /**
+   * A field nothing downstream depends on must never cost the user their session — these all
+   * used to be hard rejections that surfaced as a blank frame and a generic 502.
+   */
+  it.each([
+    ['a non-UUID userUuid', { userUuid: 'RNzffmwSR1mQ' }],
+    ['an empty name', { name: '' }],
+    ['a missing name', { name: undefined }],
+    ['a malformed avatar', { avatar: 'not-a-url' }],
+    ['an empty avatar', { avatar: '' }],
+  ])('survives %s', (_label, override) => {
+    const p = {
+      payload: {
+        ...payload.payload,
+        identity: { ...payload.payload.identity, ...override },
+      },
+    };
+    expect(exodeMainResponseSchema.safeParse(p).success).toBe(true);
+  });
+
+  it('drops a malformed avatar rather than passing it through', () => {
+    const p = {
+      payload: {
+        ...payload.payload,
+        identity: { ...payload.payload.identity, avatar: 'not-a-url' },
+      },
+    };
+    const parsed = exodeMainResponseSchema.safeParse(p);
+    expect(parsed.success && parsed.data.payload.identity.avatar).toBeUndefined();
   });
 });
 
