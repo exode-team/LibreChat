@@ -67,7 +67,19 @@ function getRefreshDelay(session: TExodeExchangeResponse): number {
   return Math.max(1_000, Math.min(tokenRefreshAt, mcpRefreshAt) - Date.now());
 }
 
-const HANDSHAKE_RETRY_DELAY_MS = 5_000;
+/**
+ * Back off on every consecutive failure instead of retrying at a fixed interval.
+ *
+ * The exchange is rate limited, and a limiter counts the requests it rejects — so a steady retry
+ * keeps the window topped up and the frame never recovers within it. Doubling from 5s to a
+ * 5-minute ceiling lets the window drain, and the delay resets the moment a handshake succeeds.
+ */
+const HANDSHAKE_RETRY_BASE_MS = 5_000;
+const HANDSHAKE_RETRY_MAX_MS = 300_000;
+
+function getHandshakeRetryDelay(attempt: number): number {
+  return Math.min(HANDSHAKE_RETRY_BASE_MS * 2 ** attempt, HANDSHAKE_RETRY_MAX_MS);
+}
 
 export default function ExodeBridge({ children }: ExodeBridgeProps) {
   const navigate = useNavigate();
@@ -86,6 +98,7 @@ export default function ExodeBridge({ children }: ExodeBridgeProps) {
     let refreshTimer: number | undefined;
     let retryTimer: number | undefined;
     let refreshDueAt: number | undefined;
+    let failedAttempts = 0;
     let exchangeInFlight = false;
 
     /**
@@ -122,16 +135,17 @@ export default function ExodeBridge({ children }: ExodeBridgeProps) {
     /**
      * A failed exchange consumed the open handshake, and the host only ever authenticates in
      * response to a bridge message — without a new handshake a transient failure would leave the
-     * frame unauthenticated until a full iframe reload. Delayed so a persistently failing
-     * backend is not hammered in a tight loop.
+     * frame unauthenticated until a full iframe reload.
      */
     const scheduleHandshakeRetry = (initial: boolean) => {
       if (retryTimer != null) {
         window.clearTimeout(retryTimer);
       }
+      const delay = getHandshakeRetryDelay(failedAttempts);
+      failedAttempts += 1;
       retryTimer = window.setTimeout(
         () => beginHandshake(initial ? 'exode-ai-chat:ready' : 'exode-ai-chat:refresh-required'),
-        HANDSHAKE_RETRY_DELAY_MS,
+        delay,
       );
     };
 
@@ -249,6 +263,7 @@ export default function ExodeBridge({ children }: ExodeBridgeProps) {
           return;
         }
         currentHandshake = undefined;
+        failedAttempts = 0;
         acceptExternalSession(session);
         scheduleRefresh(session);
 

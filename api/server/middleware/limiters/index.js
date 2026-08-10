@@ -12,6 +12,7 @@ const promptUsageLimiter = require('./promptUsageLimiter');
 const verifyEmailLimiter = require('./verifyEmailLimiter');
 const resetPasswordLimiter = require('./resetPasswordLimiter');
 const twoFactorTempLimiter = require('./twoFactorTempLimiter');
+const exodeExchangeLimiter = require('./exodeExchangeLimiter');
 const verifyEmailSubmissionLimiter = require('./verifyEmailSubmissionLimiter');
 const resetPasswordSubmissionLimiter = require('./resetPasswordSubmissionLimiter');
 
@@ -22,6 +23,7 @@ module.exports = {
   ...forkLimiters,
   ...promptUsageLimiter,
   loginLimiter,
+  exodeExchangeLimiter,
   registerLimiter,
   toolCallLimiter,
   createTTSLimiters,

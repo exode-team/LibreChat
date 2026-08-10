@@ -82,7 +82,7 @@ router.post('/refresh', refreshController);
 router.get('/exode/config', createExodeConfigController());
 router.post(
   '/exode/exchange',
-  middleware.loginLimiter,
+  middleware.exodeExchangeLimiter,
   middleware.checkBan,
   exodeExchangeController,
 );

@@ -39,11 +39,27 @@ export async function exchangeExodeBootstrap(
       body: JSON.stringify(input),
       signal: AbortSignal.timeout(5_000),
     });
-  } catch {
+  } catch (error) {
+    /**
+     * The only record this failure ever leaves. `EXODE_UNAVAILABLE` is an `ExodeExchangeError`,
+     * which the controller answers with and does not log, so without this a DNS miss, a refused
+     * connection and a timeout all reach the browser as an unexplained 502.
+     */
+    logger.error('[exodeExchange] Could not reach Exode', {
+      endpoint,
+      name: error instanceof Error ? error.name : undefined,
+      message: error instanceof Error ? error.message : String(error),
+    });
+
     throw new ExodeExchangeError('EXODE_UNAVAILABLE', 502, 'Exode authentication is unavailable');
   }
 
   if (!response.ok) {
+    logger.error('[exodeExchange] Exode refused the exchange', {
+      endpoint,
+      status: response.status,
+    });
+
     throw mapUpstreamStatus(response.status);
   }
 
