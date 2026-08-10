@@ -6,7 +6,6 @@ const config: ExodeAuthConfig = {
   serviceId: 'LibreChatBridge',
   serviceSecret: 'secret',
   issuer: 'exode-backend-main',
-  allowedOrigins: ['https://exode.biz'],
   embedJwtTtlMs: 300000,
   mcpServerName: 'exode',
 };

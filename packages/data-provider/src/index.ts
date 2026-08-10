@@ -3,7 +3,6 @@ export * from './azure';
 export * from './bedrock';
 export * from './balance';
 export * from './config';
-export * from './exode';
 export * from './file-config';
 /* messages  */
 export * from './messages';

@@ -35,9 +35,9 @@ describe('Exode iframe protocol', () => {
 
   it('accepts a theme push with and without an accent', () => {
     expect(exodeHostMessageSchema.safeParse(validTheme).success).toBe(true);
-    expect(exodeHostMessageSchema.safeParse({ ...validTheme, payload: { scheme: 'light' } }).success).toBe(
-      true,
-    );
+    expect(
+      exodeHostMessageSchema.safeParse({ ...validTheme, payload: { scheme: 'light' } }).success,
+    ).toBe(true);
   });
 
   it.each([

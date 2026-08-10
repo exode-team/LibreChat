@@ -29,7 +29,7 @@ const mockedUseAuthContext = jest.mocked(useAuthContext);
 const mockedUseExodeExchangeMutation = jest.mocked(useExodeExchangeMutation);
 const mockedUseExodeEmbedConfigQuery = jest.mocked(useExodeEmbedConfigQuery);
 
-const allowedOrigin = 'https://app.exode.test';
+const hostOrigin = 'https://app.exode.test';
 const handshakeId = '00000000-0000-4000-8000-000000000001';
 const requestId = '00000000-0000-4000-8000-000000000002';
 
@@ -52,7 +52,7 @@ const session = {
 
 function dispatchHostMessage(
   data: object,
-  origin = allowedOrigin,
+  origin = hostOrigin,
   source: MessageEventSource | null = window,
 ) {
   window.dispatchEvent(new MessageEvent('message', { data, origin, source }));
@@ -73,7 +73,7 @@ describe('ExodeBridge', () => {
     resetExodeAgentKindLatchForTests();
     window.history.replaceState({}, '', '/c/new?embed=exode');
     mockedUseExodeEmbedConfigQuery.mockReturnValue({
-      data: { enabled: true, protocol: 1, allowedOrigins: [allowedOrigin] },
+      data: { enabled: true, protocol: 1 },
     } as ReturnType<typeof useExodeEmbedConfigQuery>);
     mockedUseExodeExchangeMutation.mockReturnValue({
       mutateAsync: exchange,
@@ -94,7 +94,7 @@ describe('ExodeBridge', () => {
     randomUuidSpy.mockRestore();
   });
 
-  it('announces readiness only to configured origins', () => {
+  it('broadcasts readiness, since the framing host is not known in advance', () => {
     renderBridge();
 
     expect(postMessageSpy).toHaveBeenCalledWith(
@@ -105,11 +105,11 @@ describe('ExodeBridge', () => {
         requestId,
         payload: { handshakeId },
       },
-      allowedOrigin,
+      '*',
     );
   });
 
-  it('ignores authentication from a wrong origin, source, or handshake', async () => {
+  it('ignores authentication from a wrong source or handshake', async () => {
     renderBridge();
     const authenticate = {
       protocol: 1,
@@ -119,8 +119,7 @@ describe('ExodeBridge', () => {
       payload: { handshakeId, token: 'bootstrap-token-long-enough' },
     };
 
-    act(() => dispatchHostMessage(authenticate, 'https://attacker.test'));
-    act(() => dispatchHostMessage(authenticate, allowedOrigin, null));
+    act(() => dispatchHostMessage(authenticate, hostOrigin, null));
     act(() =>
       dispatchHostMessage({
         ...authenticate,
@@ -133,6 +132,34 @@ describe('ExodeBridge', () => {
 
     await Promise.resolve();
     expect(exchange).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Schools live on domains main assigns and onboards, so no list this frame could hold would
+   * be complete. The origin is passed through for main's logs; the bootstrap token is the gate.
+   */
+  it('accepts a handshake from any framing origin and reports it upstream', async () => {
+    exchange.mockResolvedValue(session);
+    renderBridge();
+
+    act(() =>
+      dispatchHostMessage(
+        {
+          protocol: 1,
+          source: 'exode-host',
+          type: 'exode-ai-chat:authenticate',
+          requestId,
+          payload: { handshakeId, token: 'bootstrap-token-long-enough' },
+        },
+        'https://school-on-its-own-domain.test',
+      ),
+    );
+
+    await waitFor(() =>
+      expect(exchange).toHaveBeenCalledWith(
+        expect.objectContaining({ parentOrigin: 'https://school-on-its-own-domain.test' }),
+      ),
+    );
   });
 
   it('exchanges a valid bootstrap and installs the external session', async () => {
@@ -153,7 +180,7 @@ describe('ExodeBridge', () => {
       expect(exchange).toHaveBeenCalledWith({
         token: 'bootstrap-token-long-enough',
         handshakeId,
-        parentOrigin: allowedOrigin,
+        parentOrigin: hostOrigin,
         /** No `agent` in the URL — the assistant is the default */
         kind: 'Assistant',
       });
@@ -163,7 +190,7 @@ describe('ExodeBridge', () => {
           type: 'exode-ai-chat:authenticated',
           requestId,
         }),
-        allowedOrigin,
+        hostOrigin,
       );
     });
   });

@@ -5,17 +5,9 @@ import type { ExodeExchangeDeps } from './controller';
 import { createExodeExchangeController } from './controller';
 
 jest.mock('@librechat/data-schemas', () => ({ logger: { error: jest.fn() } }), { virtual: true });
-/* The origin matcher comes from the real module rather than a stub: it is the gate this suite
- * exercises, and a hand-written copy here would keep passing after the shared rule changed. */
-jest.mock(
-  'librechat-data-provider',
-  () => ({
-    SystemRoles: { USER: 'USER' },
-    isAllowedExodeOrigin: jest.requireActual('../../../../data-provider/src/exode')
-      .isAllowedExodeOrigin,
-  }),
-  { virtual: true },
-);
+jest.mock('librechat-data-provider', () => ({ SystemRoles: { USER: 'USER' } }), {
+  virtual: true,
+});
 jest.mock('~/auth/openid', () => ({
   normalizeOpenIdIssuer: (issuer?: string) => issuer?.trim().replace(/\/+$/, '') || undefined,
 }));
@@ -100,7 +92,6 @@ describe('createExodeExchangeController', () => {
       EXODE_MAIN_SERVICE_ID: 'LibreChatBridge',
       EXODE_MAIN_SERVICE_SECRET: 'service-secret',
       EXODE_MAIN_ISSUER: 'exode-backend-main',
-      EXODE_EMBED_ORIGINS: 'https://exode.biz',
       EXODE_EMBED_JWT_TTL_MS: '300000',
       EXODE_MCP_SERVER_NAME: 'exode',
     };
@@ -139,12 +130,34 @@ describe('createExodeExchangeController', () => {
     });
   });
 
-  it('rejects a parent origin outside the allowlist before calling main', async () => {
+  /**
+   * A school on its own domain is indistinguishable from a stranger at this point — only the
+   * bootstrap token, which main verifies and burns, tells them apart. So the origin travels
+   * upstream for main's logs rather than being judged here.
+   */
+  it('forwards an unfamiliar parent origin to main instead of refusing it', async () => {
     const { deps } = createDeps(createUser());
     const response = await invokeController(createExodeExchangeController(deps), {
       token: 'bootstrap-token-with-enough-length',
       handshakeId,
-      parentOrigin: 'https://attacker.example.com',
+      parentOrigin: 'https://school-on-its-own-domain.example',
+    });
+
+    expect(response.status).toHaveBeenCalledWith(200);
+    expect(deps.fetcher).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        body: expect.stringContaining('https://school-on-its-own-domain.example'),
+      }),
+    );
+  });
+
+  it('rejects a parent origin that is not a URL', async () => {
+    const { deps } = createDeps(createUser());
+    const response = await invokeController(createExodeExchangeController(deps), {
+      token: 'bootstrap-token-with-enough-length',
+      handshakeId,
+      parentOrigin: 'not-an-origin',
     });
 
     expect(response.status).toHaveBeenCalledWith(400);

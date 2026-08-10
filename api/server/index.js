@@ -18,8 +18,6 @@ const {
   memoryDiagnostics,
   performStartupChecks,
   handleJsonParseError,
-  getExodeFrameAncestors,
-  isExodeEmbedRequest,
   GenerationJobManager,
   QUERY_DEVTOOLS_HEADER,
   createStreamServices,
@@ -179,9 +177,6 @@ const startServer = async () => {
       Expires: process.env.INDEX_EXPIRES || '0',
     });
     res.vary(QUERY_DEVTOOLS_HEADER);
-    if (isExodeEmbedRequest(req.path, req.query.embed)) {
-      res.set('Content-Security-Policy', `frame-ancestors ${getExodeFrameAncestors()}`);
-    }
 
     const lang = req.cookies.lang || req.headers['accept-language']?.split(',')[0] || 'en-US';
     const saneLang = lang.replace(/"/g, '&quot;');

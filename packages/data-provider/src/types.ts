@@ -537,7 +537,6 @@ export type TLoginResponse = {
 export type TExodeEmbedConfig = {
   enabled: boolean;
   protocol: 1;
-  allowedOrigins: string[];
 };
 
 export type TExodeExchangeRequest = {

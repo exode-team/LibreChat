@@ -1,7 +1,6 @@
 import { useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ThemeContext } from '@librechat/client';
-import { isAllowedExodeOrigin, resolveExodeTargetOrigins } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { TExodeExchangeResponse } from 'librechat-data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
@@ -82,12 +81,6 @@ export default function ExodeBridge({ children }: ExodeBridgeProps) {
       return;
     }
 
-    /**
-     * Resolved once per mount: `postMessage` rejects a wildcard as a target, so before a
-     * handshake pins down `activeOrigin` the parent is taken from the referrer (checked against
-     * the allow-list) and only falls back to broadcasting the exact entries.
-     */
-    const initialTargets = resolveExodeTargetOrigins(config.allowedOrigins, document.referrer);
     let activeOrigin: string | undefined;
     let currentHandshake: Handshake | undefined;
     let refreshTimer: number | undefined;
@@ -95,11 +88,17 @@ export default function ExodeBridge({ children }: ExodeBridgeProps) {
     let refreshDueAt: number | undefined;
     let exchangeInFlight = false;
 
+    /**
+     * Broadcast until a handshake pins the parent down, then address it exactly.
+     *
+     * The chat does not know which host framed it — school domains live in main and change on
+     * onboarding, not on deploy — so the opening `ready` has nowhere specific to go. Safe to
+     * broadcast because nothing the bridge sends outward is a secret: a freshly minted handshake
+     * id, and error codes. Everything that matters travels the other way, and the bootstrap
+     * token answering it is single-use and bound to that handshake id.
+     */
     const post = (message: ExodeBridgeMessage, origin?: string) => {
-      const targets = origin ? [origin] : initialTargets;
-      for (const targetOrigin of targets) {
-        window.parent.postMessage(message, targetOrigin);
-      }
+      window.parent.postMessage(message, origin ?? activeOrigin ?? '*');
     };
 
     const beginHandshake = (type: 'exode-ai-chat:ready' | 'exode-ai-chat:refresh-required') => {
@@ -173,11 +172,16 @@ export default function ExodeBridge({ children }: ExodeBridgeProps) {
       beginHandshake('exode-ai-chat:refresh-required');
     };
 
+    /**
+     * The framing page is the only accepted sender; which page that is, main decides.
+     *
+     * There is no origin allow-list to check against — it would have to enumerate every school
+     * domain — so the gate is the bootstrap token the host answers with: minted by main for a
+     * signed-in exode session, valid once, and tied to the handshake id issued just above. A
+     * stranger who frames the chat can talk to this listener and still establish nothing.
+     */
     const handleMessage = async (event: MessageEvent) => {
-      if (
-        event.source !== window.parent ||
-        !isAllowedExodeOrigin(event.origin, config.allowedOrigins)
-      ) {
+      if (event.source !== window.parent) {
         return;
       }
 

@@ -10,7 +10,6 @@ export interface ExodeAuthConfig {
   serviceId: string;
   serviceSecret: string;
   issuer: string;
-  allowedOrigins: string[];
   embedJwtTtlMs: number;
   mcpServerName: string;
 }
@@ -18,57 +17,6 @@ export interface ExodeAuthConfig {
 export interface ExodeEmbedConfig {
   enabled: boolean;
   protocol: typeof EXODE_BRIDGE_PROTOCOL;
-  allowedOrigins: string[];
-}
-
-function normalizeOrigin(value: string): string {
-  const url = new URL(value);
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new Error('Exode embed origins must use HTTP or HTTPS');
-  }
-  if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
-    throw new Error('Exode embed origins must contain only scheme, host, and port');
-  }
-  assertUsableWildcard(url.hostname);
-  return url.origin;
-}
-
-/**
- * A `*.` host is allowed — it is how a deployment covers every school subdomain without
- * enumerating them — but only where the wildcard cannot swallow a public suffix. `*.example.com`
- * is a domain someone owns; `*.com`, or a bare `*`, would hand embed permission to the whole
- * internet. Requiring two labels is the cheapest guard that separates the two without shipping a
- * public-suffix list, and it runs at config load so a typo fails on boot instead of silently
- * widening who may frame the chat.
- */
-function assertUsableWildcard(hostname: string): void {
-  if (!hostname.startsWith('*.')) {
-    if (hostname.includes('*')) {
-      throw new Error('An Exode embed origin may only use `*` as a leading `*.` host label');
-    }
-    return;
-  }
-
-  const base = hostname.slice(2);
-
-  if (base.includes('*')) {
-    throw new Error('An Exode embed origin may only use `*` as a leading `*.` host label');
-  }
-
-  if (base.split('.').filter(Boolean).length < 2) {
-    throw new Error(
-      `Exode embed origin '*.${base}' is too broad — a wildcard needs at least two host labels`,
-    );
-  }
-}
-
-function readAllowedOrigins(): string[] {
-  const configured = process.env.EXODE_EMBED_ORIGINS?.split(',') ?? [];
-  const origins = configured
-    .map((origin) => origin.trim())
-    .filter(Boolean)
-    .map(normalizeOrigin);
-  return [...new Set(origins)];
 }
 
 function readTtl(): number {
@@ -91,9 +39,7 @@ function requireValue(name: string): string {
 }
 
 export function getExodeEmbedConfig(): ExodeEmbedConfig {
-  const allowedOrigins = readAllowedOrigins();
   const enabled =
-    allowedOrigins.length > 0 &&
     Boolean(process.env.EXODE_MAIN_URL?.trim()) &&
     Boolean(process.env.EXODE_MAIN_SERVICE_ID?.trim()) &&
     Boolean(process.env.EXODE_MAIN_SERVICE_SECRET?.trim()) &&
@@ -102,7 +48,6 @@ export function getExodeEmbedConfig(): ExodeEmbedConfig {
   return {
     enabled,
     protocol: EXODE_BRIDGE_PROTOCOL,
-    allowedOrigins,
   };
 }
 
@@ -112,45 +57,12 @@ export function getExodeAuthConfig(): ExodeAuthConfig {
     throw new Error('EXODE_MAIN_URL must use HTTP or HTTPS');
   }
 
-  const allowedOrigins = readAllowedOrigins();
-  if (allowedOrigins.length === 0) {
-    throw new Error('EXODE_EMBED_ORIGINS must contain at least one origin');
-  }
-
   return {
     mainUrl: mainUrl.toString(),
     serviceId: requireValue('EXODE_MAIN_SERVICE_ID'),
     serviceSecret: requireValue('EXODE_MAIN_SERVICE_SECRET'),
     issuer: requireValue('EXODE_MAIN_ISSUER'),
-    allowedOrigins,
     embedJwtTtlMs: readTtl(),
     mcpServerName: process.env.EXODE_MCP_SERVER_NAME?.trim() || 'exode',
   };
-}
-
-export function getExodeFrameAncestors(): string {
-  const { allowedOrigins } = getExodeEmbedConfig();
-  return allowedOrigins.length > 0 ? allowedOrigins.join(' ') : "'none'";
-}
-
-/**
- * Whether this request should be served with the embed CSP.
- *
- * `embedQuery` is widened to Express's real type: a repeated parameter (`?embed=exode&embed=x`)
- * arrives as an array, and a strict `=== 'exode'` on it is false — which dropped the
- * `frame-ancestors` header while the client, reading the same URL with
- * `URLSearchParams.get('embed')`, still saw `'exode'` and activated the bridge. That is the wrong
- * way round to fail, so any occurrence of `exode` counts here: the check errs towards *setting*
- * the restriction.
- */
-export function isExodeEmbedRequest(path: string, embedQuery?: unknown): boolean {
-  if (path === '/embed/exode') {
-    return true;
-  }
-
-  if (Array.isArray(embedQuery)) {
-    return embedQuery.some((value) => value === 'exode');
-  }
-
-  return embedQuery === 'exode';
 }
