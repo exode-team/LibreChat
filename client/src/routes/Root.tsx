@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRecoilValue } from 'recoil';
 import { Outlet } from 'react-router-dom';
-import { useMediaQuery } from '@librechat/client';
 import {
   PromptGroupsProvider,
   AssistantsMapContext,
@@ -25,7 +24,7 @@ import { TermsAndConditionsModal } from '~/components/ui';
 import { useHealthCheck } from '~/data-provider';
 import { Banner } from '~/components/Banners';
 import store from '~/store';
-import { useIsExodeEmbed, useExodeTheme } from '~/components/Exode';
+import { useIsExodeEmbed, useIsSmallScreen, useExodeTheme } from '~/components/Exode';
 
 /** Isolates keyboard shortcut listeners so they only mount after auth. */
 function KeyboardShortcutsProvider() {
@@ -42,7 +41,7 @@ export default function Root() {
   const [showTerms, setShowTerms] = useState(false);
   const [bannerHeight, setBannerHeight] = useState(0);
   const sidebarExpanded = useRecoilValue(store.sidebarExpanded);
-  const isSmallScreen = useMediaQuery('(max-width: 768px)');
+  const isSmallScreen = useIsSmallScreen();
   const embedded = useIsExodeEmbed();
   useExodeTheme();
 

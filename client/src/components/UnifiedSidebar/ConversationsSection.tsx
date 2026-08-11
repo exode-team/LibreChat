@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState, useMemo, memo, lazy, Suspense, useRef } from 'react';
 import { useSetRecoilState, useRecoilValue } from 'recoil';
-import { useMediaQuery } from '@librechat/client';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import type { InfiniteQueryObserverResult } from '@tanstack/react-query';
 import type { ConversationListResponse } from 'librechat-data-provider';
@@ -17,7 +16,7 @@ import { Conversations } from '~/components/Conversations';
 import ProjectsSection from '~/components/Conversations/ProjectsSection';
 import FavoritesList from '~/components/Nav/Favorites/FavoritesList';
 import SearchBar from '~/components/Nav/SearchBar';
-import { useIsExodeEmbed, useExodeAgentId } from '~/components/Exode';
+import { useIsExodeEmbed, useExodeAgentId, useIsSmallScreen } from '~/components/Exode';
 import NewChatButton from './NewChatButton';
 import store from '~/store';
 
@@ -27,7 +26,7 @@ const ConversationsSection = memo(() => {
   const localize = useLocalize();
   const isExodeEmbed = useIsExodeEmbed();
   const exodeAgentId = useExodeAgentId();
-  const isSmallScreen = useMediaQuery('(max-width: 768px)');
+  const isSmallScreen = useIsSmallScreen();
   const setSidebarExpanded = useSetRecoilState(store.sidebarExpanded);
   const { isAuthenticated } = useAuthContext();
   useTitleGeneration(isAuthenticated);

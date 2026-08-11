@@ -2,13 +2,12 @@ import { useCallback, useState, useEffect, useRef, memo, startTransition } from 
 import type { ReactNode } from 'react';
 import { useRecoilState } from 'recoil';
 import { useForm } from 'react-hook-form';
-import { useMediaQuery } from '@librechat/client';
 import type { ChatFormValues } from '~/common';
 import { ChatContext, ChatFormProvider, ActivePanelProvider } from '~/Providers';
 import useUnifiedSidebarLinks from '~/hooks/Nav/useUnifiedSidebarLinks';
 import { useChatHelpers, useLocalize } from '~/hooks';
 import SidePanelNav from '~/components/SidePanel/Nav';
-import { useIsExodeEmbed } from '~/components/Exode';
+import { useIsExodeEmbed, useIsSmallScreen } from '~/components/Exode';
 import ExpandedPanel from './ExpandedPanel';
 import Sidebar from './Sidebar';
 import { cn } from '~/utils';
@@ -51,7 +50,6 @@ function SidebarChatProvider({ children }: { children: ReactNode }) {
 
 function UnifiedSidebar() {
   const localize = useLocalize();
-  const mediaQueryIsSmallScreen = useMediaQuery('(max-width: 768px)');
   const [storedExpanded, setExpanded] = useRecoilState(store.sidebarExpanded);
   const isExodeEmbed = useIsExodeEmbed();
   /**
@@ -65,16 +63,7 @@ function UnifiedSidebar() {
    */
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const expanded = isExodeEmbed ? hoverExpanded : storedExpanded;
-  /**
-   * The embed's own viewport (an iframe sized to a fraction of the host page, e.g. the exode
-   * assistant panel at ~26vw) is narrow enough to trip this media query even on a desktop host
-   * — `(max-width: 768px)` measures the iframe document, not the outer window. Below it falls
-   * into the small-screen branch: a `position: fixed`, `85vw`-wide slide-over drawer plus the
-   * full `ExpandedPanel` icon rail (with `AccountSettings` etc.) that `Sidebar.tsx` already
-   * excludes on the desktop path. Left alone, that drawer fills the entire iframe and duplicates
-   * chrome the embed intentionally hides. The embed always takes the desktop path instead.
-   */
-  const isSmallScreen = isExodeEmbed ? false : mediaQueryIsSmallScreen;
+  const isSmallScreen = useIsSmallScreen();
   const [sidebarWidth, setSidebarWidth] = useState(getInitialWidth);
   const [isResizing, setIsResizing] = useState(false);
   const resizeHandlers = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null);
