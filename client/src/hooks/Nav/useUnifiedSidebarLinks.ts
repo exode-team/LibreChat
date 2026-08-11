@@ -7,12 +7,14 @@ import type { TEndpointsConfig } from 'librechat-data-provider';
 import type { NavLink } from '~/common';
 import ConversationsSection from '~/components/UnifiedSidebar/ConversationsSection';
 import { useGetEndpointsQuery, useGetStartupConfig } from '~/data-provider';
+import { useIsExodeEmbed } from '~/components/Exode';
 import useSideNavLinks from '~/hooks/Nav/useSideNavLinks';
 import store from '~/store';
 
 const defaultInterface = getConfigDefaults().interface;
 
 export default function useUnifiedSidebarLinks() {
+  const isExodeEmbed = useIsExodeEmbed();
   const conversation = useRecoilValue(store.conversationByIndex(0));
   const endpoint = conversation?.endpoint;
   const { data: startupConfig } = useGetStartupConfig();
@@ -58,8 +60,21 @@ export default function useUnifiedSidebarLinks() {
       Component: ConversationsSection,
     };
 
+    /**
+     * The exode embed gets its history and nothing else.
+     *
+     * Agents are provisioned by exode for the signed-in principal, so the builder here offers
+     * the user a Create/Save/Delete over records they do not own — and the MCP panel next to it
+     * edits `EXODE_AI_TOKEN`, the credential the bridge just installed for them. The rest
+     * (model parameters, prompts, memories, files) is LibreChat chrome the host app owns, the
+     * same reason the icon rail, header and footer are already hidden.
+     */
+    if (isExodeEmbed) {
+      return [conversationLink];
+    }
+
     return [conversationLink, ...sideNavLinks];
-  }, [sideNavLinks]);
+  }, [sideNavLinks, isExodeEmbed]);
 
   return links;
 }
