@@ -190,9 +190,7 @@ export async function reprovisionAgents(
    * own no-op guard decide what actually changes.
    */
   const candidates = await deps.getAgents(
-    instructionsByKind
-      ? {}
-      : { $or: [{ provider: { $ne: provider } }, { model: { $ne: model } }] },
+    instructionsByKind ? {} : { $or: [{ provider: { $ne: provider } }, { model: { $ne: model } }] },
   );
 
   const result: ExodeReprovisionAgentsResult = {

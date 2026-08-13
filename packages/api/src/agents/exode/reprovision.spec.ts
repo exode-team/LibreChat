@@ -31,9 +31,7 @@ type MockedDeps = {
   updateAgent: jest.Mock & ExodeReprovisionAgentsDeps['updateAgent'];
 };
 
-function makeDeps(
-  overrides: Partial<MockedDeps> = {},
-): MockedDeps & ExodeReprovisionAgentsDeps {
+function makeDeps(overrides: Partial<MockedDeps> = {}): MockedDeps & ExodeReprovisionAgentsDeps {
   const getAgents = jest.fn(async (filter: FilterQuery<IAgent>) =>
     applyStaleFilter(filter),
   ) as MockedDeps['getAgents'];
@@ -127,7 +125,6 @@ describe('reprovisionAgents', () => {
     });
   });
 });
-
 
 /**
  * The instructions sweep. A prompt is where the product's guardrails live, so an agent created
@@ -260,4 +257,3 @@ describe('classifyAgentKind', () => {
     expect(classifyAgentKind({ tools: [] })).toBe('router');
   });
 });
-
