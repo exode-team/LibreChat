@@ -81,7 +81,8 @@ export interface ExodeReprovisionAgentsResult {
   dryRun: boolean;
   /** Agent ids that could not be updated, so the caller can log something actionable. */
   failedIds: string[];
-  /** How many agents were classified as each kind — empty unless instructions were sent.
+  /** How many agents were classified as each kind. Always carries every kind; all four stay
+   *  zero when no instructions were sent, since nothing is classified in that case.
    *  A dry run returns this and writes nothing, which is how an operator checks the
    *  classification before trusting it. */
   byKind: Record<ExodeAgentKind, number>;

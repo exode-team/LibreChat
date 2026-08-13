@@ -1,4 +1,4 @@
-﻿import type { IAgent } from '@librechat/data-schemas';
+import type { IAgent } from '@librechat/data-schemas';
 import type { FilterQuery } from 'mongoose';
 import { classifyAgentKind, reprovisionAgents } from './reprovision';
 import type { ExodeReprovisionAgentsDeps } from './reprovision';
@@ -218,9 +218,12 @@ describe('reprovisionAgents — instructions', () => {
 
   it('touches no instructions when the caller sends none', async () => {
     const deps = makeDeps();
-    await reprovisionAgents(deps, { provider: 'qwen', model: 'qwen-max' });
+    const result = await reprovisionAgents(deps, { provider: 'qwen', model: 'qwen-max' });
 
     expect(deps.updateAgent.mock.calls[0][1]).not.toHaveProperty('instructions');
+    /** Every kind is still present in the response, just never incremented — nothing is
+     *  classified when there are no instructions to choose between. */
+    expect(result.byKind).toEqual({ space: 0, router: 0, assistant: 0, knowledge: 0 });
   });
 });
 
