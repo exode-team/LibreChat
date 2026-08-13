@@ -1,7 +1,7 @@
 import type { IAgent } from '@librechat/data-schemas';
 import type { FilterQuery } from 'mongoose';
-import { classifyAgentKind, reprovisionAgents } from './reprovision';
 import type { ExodeReprovisionAgentsDeps } from './reprovision';
+import { classifyAgentKind, reprovisionAgents } from './reprovision';
 
 jest.mock('@librechat/data-schemas', () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
