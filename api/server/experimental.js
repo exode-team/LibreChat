@@ -21,6 +21,7 @@ const {
   performStartupChecks,
   handleJsonParseError,
   deleteAgentCheckpoint,
+  createExodeFrameAncestorsMiddleware,
   initializeFileStorage,
   loadToolApprovalHooks,
   maybeInjectQueryDevtoolsBootstrap,
@@ -372,6 +373,8 @@ if (cluster.isMaster) {
 
     /** Middleware */
     app.use(noIndex);
+    /** Frame-ancestors CSP for the embedded chat — see the mirror call in index.js */
+    app.use(createExodeFrameAncestorsMiddleware());
     app.use('/api/auth/exode/exchange', express.json({ limit: '32kb' }));
     app.use(express.json({ limit: '3mb' }));
     app.use(express.urlencoded({ extended: true, limit: '3mb' }));

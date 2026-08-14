@@ -21,6 +21,7 @@ const {
   GenerationJobManager,
   QUERY_DEVTOOLS_HEADER,
   createStreamServices,
+  createExodeFrameAncestorsMiddleware,
   deleteAgentCheckpoint,
   initializeFileStorage,
   initializeDeploymentSkills,
@@ -187,6 +188,7 @@ const startServer = async () => {
     res.send(updatedIndexHtml);
   };
 
+
   app.get('/health', (_req, res) => res.status(200).send('OK'));
   app.get('/livez', (_req, res) => res.status(200).send('OK'));
   app.get('/readyz', (_req, res) => {
@@ -199,6 +201,12 @@ const startServer = async () => {
   /* Middleware */
   app.use(metricsMiddleware);
   app.use(noIndex);
+  /**
+   * Before the static handlers: index.html is served from three places (`/index.html`, the
+   * static root, the SPA fallback), and the frame-ancestors CSP has to be on the document
+   * response wherever it comes from. The middleware skips API and asset requests itself.
+   */
+  app.use(createExodeFrameAncestorsMiddleware());
   app.use('/api/auth/exode/exchange', express.json({ limit: '32kb' }));
   app.use(express.json({ limit: '3mb' }));
   app.use(express.urlencoded({ extended: true, limit: '3mb' }));
