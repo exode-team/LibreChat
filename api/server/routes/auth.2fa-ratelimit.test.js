@@ -65,6 +65,7 @@ jest.mock('~/server/middleware', () => {
   return {
     logHeaders: pass,
     loginLimiter: pass,
+    exodeExchangeLimiter: pass,
     setTwoFactorTempUser: (...args) => mockSetTwoFactorTempUser(...args),
     twoFactorTempLimiter: (...args) => mockTwoFactorTempLimiter(...args),
     checkBan: (...args) => mockCheckBan(...args),
