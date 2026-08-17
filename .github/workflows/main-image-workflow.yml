@@ -12,19 +12,17 @@ permissions:
   contents: read
   packages: write
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - target: api-build
-            file: Dockerfile.multi
-            image_name: librechat-api
-#          - target: node
-#            file: Dockerfile
-#            image_name: librechat
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/librechat-api
 
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      push_latest: ${{ steps.resolve.outputs.push_latest }}
+      commit: ${{ steps.resolve.outputs.commit }}
+      date: ${{ steps.resolve.outputs.date }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,6 +30,7 @@ jobs:
           fetch-depth: 0
 
       - name: Resolve release tag
+        id: resolve
         run: |
           set -euo pipefail
           git fetch --tags --force
@@ -56,40 +55,33 @@ jobs:
             PUSH_LATEST=false
             echo "::notice::$LATEST_TAG is not the newest stable tag ($NEWEST_TAG); the :latest tag will not be moved"
           fi
-          printf 'LATEST_TAG=%s\n' "$LATEST_TAG" >> "$GITHUB_ENV"
-          printf 'PUSH_LATEST=%s\n' "$PUSH_LATEST" >> "$GITHUB_ENV"
-
-      - name: Check out the release tag
-        run: |
-          set -euo pipefail
-          git checkout --detach "refs/tags/$LATEST_TAG"
-          git log -1 --format='Building %H (%d)'
-
-      - name: Compute build metadata
-        run: |
-          set -euo pipefail
-          printf 'BUILD_COMMIT=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-          printf 'BUILD_BRANCH=%s\n' "$LATEST_TAG" >> "$GITHUB_ENV"
-          printf 'BUILD_DATE=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
-          IMAGE='ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}'
           {
-            echo 'IMAGE_TAGS<<IMAGE_TAGS_EOF'
-            printf '%s:%s\n' "$IMAGE" "$LATEST_TAG"
-            if [ "$PUSH_LATEST" = 'true' ]; then
-              printf '%s:latest\n' "$IMAGE"
-            fi
-            echo 'IMAGE_TAGS_EOF'
-          } >> "$GITHUB_ENV"
+            printf 'tag=%s\n' "$LATEST_TAG"
+            printf 'push_latest=%s\n' "$PUSH_LATEST"
+            printf 'commit=%s\n' "$(git rev-parse "refs/tags/$LATEST_TAG^{commit}")"
+            printf 'date=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          } >> "$GITHUB_OUTPUT"
 
-      # Set up QEMU
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+  build:
+    needs: resolve
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.resolve.outputs.tag }}
 
-      # Set up Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Log in to GitHub Container Registry
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -97,22 +89,75 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Prepare the environment
       - name: Prepare environment
         run: |
           cp .env.example .env
 
-      # Build and push Docker images for each target
-      - name: Build and push Docker images
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ matrix.file }}
-          push: true
-          tags: ${{ env.IMAGE_TAGS }}
-          platforms: linux/amd64,linux/arm64
-          target: ${{ matrix.target }}
+          file: Dockerfile.multi
+          target: api-build
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
-            BUILD_COMMIT=${{ env.BUILD_COMMIT }}
-            BUILD_BRANCH=${{ env.BUILD_BRANCH }}
-            BUILD_DATE=${{ env.BUILD_DATE }}
+            BUILD_COMMIT=${{ needs.resolve.outputs.commit }}
+            BUILD_BRANCH=${{ needs.resolve.outputs.tag }}
+            BUILD_DATE=${{ needs.resolve.outputs.date }}
+
+      - name: Export digest
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/digests
+          digest='${{ steps.build.outputs.digest }}'
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Sanitize platform name
+        run: |
+          printf 'PLATFORM_PAIR=%s\n' "$(echo '${{ matrix.platform }}' | tr '/' '-')" >> "$GITHUB_ENV"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digests-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifest
+        working-directory: /tmp/digests
+        run: |
+          set -euo pipefail
+          TAG_ARGS="-t $IMAGE:${{ needs.resolve.outputs.tag }}"
+          if [ '${{ needs.resolve.outputs.push_latest }}' = 'true' ]; then
+            TAG_ARGS="$TAG_ARGS -t $IMAGE:latest"
+          fi
+          docker buildx imagetools create $TAG_ARGS \
+            $(printf "$IMAGE@sha256:%s " *)
+
+      - name: Inspect manifest
+        run: |
+          docker buildx imagetools inspect "$IMAGE:${{ needs.resolve.outputs.tag }}"
