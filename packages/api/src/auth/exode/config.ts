@@ -1,4 +1,10 @@
-const DEFAULT_EMBED_JWT_TTL_MS = 5 * 60 * 1000;
+/**
+ * The embed JWT drives the bridge's whole refresh cadence: every renewal is a full
+ * bootstrap + exchange (agent reconcile, MCP reconnect included), so short TTLs buy churn,
+ * not safety — revocation is the host's `logout` message plus the exode-session-bound MCP
+ * token, not this expiry. Hence the ceiling as the default.
+ */
+const DEFAULT_EMBED_JWT_TTL_MS = 15 * 60 * 1000;
 const MIN_EMBED_JWT_TTL_MS = 60 * 1000;
 const MAX_EMBED_JWT_TTL_MS = 15 * 60 * 1000;
 
