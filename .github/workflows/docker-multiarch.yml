@@ -1,0 +1,187 @@
+name: Reusable Multi-Arch Docker Build
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: 'Dockerfile build target'
+        required: true
+        type: string
+      file:
+        description: 'Dockerfile path'
+        required: true
+        type: string
+      image_name:
+        description: 'Image name without registry prefix (e.g. librechat-api)'
+        required: true
+        type: string
+      tags:
+        description: 'Newline-separated list of tags to apply to the merged manifest'
+        required: true
+        type: string
+      dockerhub:
+        description: 'Also push to Docker Hub under DOCKERHUB_USERNAME'
+        required: false
+        type: boolean
+        default: false
+      ref:
+        description: 'Git ref to build; defaults to the triggering commit'
+        required: false
+        type: string
+        default: ''
+      build_commit:
+        description: 'Overrides BUILD_COMMIT; defaults to the triggering commit SHA'
+        required: false
+        type: string
+        default: ''
+      build_branch:
+        description: 'Overrides BUILD_BRANCH; defaults to the triggering ref name'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: false
+      DOCKERHUB_TOKEN:
+        required: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 130
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        if: ${{ inputs.dockerhub }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+
+      - name: Compute build metadata
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          PUSH_DOCKERHUB: ${{ inputs.dockerhub }}
+          IMAGE_NAME: ${{ inputs.image_name }}
+        run: |
+          set -euo pipefail
+          NAMES="ghcr.io/${GITHUB_REPOSITORY_OWNER}/${IMAGE_NAME}"
+          if [ "$PUSH_DOCKERHUB" = 'true' ]; then
+            NAMES="$NAMES,docker.io/${DOCKERHUB_USERNAME}/${IMAGE_NAME}"
+          fi
+          {
+            printf 'IMAGE_NAMES=%s\n' "$NAMES"
+            printf 'BUILD_COMMIT=%s\n' '${{ inputs.build_commit || github.sha }}'
+            printf 'BUILD_BRANCH=%s\n' '${{ inputs.build_branch || github.ref_name }}'
+            printf 'BUILD_DATE=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            printf 'PLATFORM_PAIR=%s\n' "$(echo '${{ matrix.platform }}' | tr '/' '-')"
+          } >> "$GITHUB_ENV"
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ inputs.file }}
+          target: ${{ inputs.target }}
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,"name=${{ env.IMAGE_NAMES }}",push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            BUILD_COMMIT=${{ env.BUILD_COMMIT }}
+            BUILD_BRANCH=${{ env.BUILD_BRANCH }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+
+      - name: Export digest
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/digests
+          digest='${{ steps.build.outputs.digest }}'
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ inputs.target }}-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digests-${{ inputs.target }}-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        if: ${{ inputs.dockerhub }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifests
+        working-directory: /tmp/digests
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          PUSH_DOCKERHUB: ${{ inputs.dockerhub }}
+          IMAGE_NAME: ${{ inputs.image_name }}
+          TAGS: ${{ inputs.tags }}
+        run: |
+          set -euo pipefail
+          IMAGES="ghcr.io/${GITHUB_REPOSITORY_OWNER}/${IMAGE_NAME}"
+          if [ "$PUSH_DOCKERHUB" = 'true' ]; then
+            IMAGES="$IMAGES docker.io/${DOCKERHUB_USERNAME}/${IMAGE_NAME}"
+          fi
+          FIRST_TAG=$(printf '%s\n' "$TAGS" | head -n 1)
+          for IMAGE in $IMAGES; do
+            TAG_ARGS=''
+            while IFS= read -r TAG; do
+              if [ -n "$TAG" ]; then
+                TAG_ARGS="$TAG_ARGS -t $IMAGE:$TAG"
+              fi
+            done <<< "$TAGS"
+            docker buildx imagetools create $TAG_ARGS \
+              $(printf "$IMAGE@sha256:%s " *)
+            docker buildx imagetools inspect "$IMAGE:$FIRST_TAG"
+          done
