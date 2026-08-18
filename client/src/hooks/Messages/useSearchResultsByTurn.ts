@@ -9,6 +9,9 @@ interface FileSource {
   relevance?: number;
   pageRelevance?: Record<string, number>;
   metadata?: any;
+  /** exode fork: the original document's URL in exode storage, when the file that produced
+   *  this source carried one (see fileSearch.js's `sources` mapping). */
+  sourceUrl?: string;
 }
 
 interface DeduplicatedSource {
@@ -18,6 +21,7 @@ interface DeduplicatedSource {
   relevance: number;
   pageRelevance: Record<string, number>;
   metadata?: any;
+  sourceUrl?: string;
 }
 
 /**
@@ -87,6 +91,7 @@ export function useSearchResultsByTurn(attachments?: TAttachment[]) {
               relevance: source.relevance || 0.5,
               pageRelevance: source.pageRelevance || {},
               metadata: source.metadata,
+              sourceUrl: source.sourceUrl,
             });
           }
         });
@@ -114,6 +119,7 @@ export function useSearchResultsByTurn(attachments?: TAttachment[]) {
                 pages: source.pages,
                 pageRelevance: source.pageRelevance,
                 metadata: source.metadata,
+                sourceUrl: source.sourceUrl,
               }) as any,
           ),
         };

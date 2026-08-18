@@ -25,7 +25,7 @@ const fileSearchJsonSchema = {
  * @param {Agent['tool_resources']} options.tool_resources
  * @param {string} [options.agentId] - The agent ID for file access control
  * @returns {Promise<{
- *   files: Array<{ file_id: string; filename: string; fromAgent: boolean }>,
+ *   files: Array<{ file_id: string; filename: string; fromAgent: boolean; sourceUrl?: string }>,
  *   toolContext: string
  * }>}
  */
@@ -71,6 +71,10 @@ const primeFiles = async (options) => {
       file_id: file.file_id,
       filename: file.filename,
       fromAgent: agentResourceIds.has(file.file_id),
+      // exode fork: the knowledge-base document's original URL on main's storage, if the upload
+      // sent one (see the `file.ts` schema's `metadata.sourceUrl` comment). Carried through so a
+      // citation can link the reader to the real original instead of only this RAG-ingested copy.
+      sourceUrl: file.metadata?.sourceUrl,
     });
   }
 
@@ -81,7 +85,7 @@ const primeFiles = async (options) => {
  *
  * @param {Object} options
  * @param {string} options.userId
- * @param {Array<{ file_id: string; filename: string; fromAgent?: boolean }>} options.files
+ * @param {Array<{ file_id: string; filename: string; fromAgent?: boolean; sourceUrl?: string }>} options.files
  * @param {string} [options.entity_id]
  * @param {boolean} [options.fileCitations=false] - Whether to include citation instructions
  * @returns
@@ -189,6 +193,7 @@ const createFileSearchTool = async ({ userId, files, entity_id, fileCitations = 
             distance,
             file_id: file?.file_id,
             page: docInfo.metadata.page || null,
+            sourceUrl: file?.sourceUrl,
           })),
         )
         .sort((a, b) => a.distance - b.distance)
@@ -218,6 +223,10 @@ const createFileSearchTool = async ({ userId, files, entity_id, fileCitations = 
         relevance: 1.0 - result.distance,
         pages: result.page ? [result.page] : [],
         pageRelevance: result.page ? { [result.page]: 1.0 - result.distance } : {},
+        // exode fork: the original document's URL on main's storage, when the upload carried one
+        // (see primeFiles above). `Citation.tsx` offers it as an "open original" action alongside
+        // the in-app preview; absent for files uploaded before this field existed.
+        ...(result.sourceUrl ? { sourceUrl: result.sourceUrl } : {}),
       }));
 
       return [formattedString, { [Tools.file_search]: { sources, fileCitations } }];

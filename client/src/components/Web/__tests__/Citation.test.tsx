@@ -29,9 +29,19 @@ jest.mock('~/hooks', () => ({
 
 jest.mock('~/components/Chat/Messages/Content/FilePreviewDialog', () => ({
   __esModule: true,
-  default: ({ open, fileId, fileName }: { open: boolean; fileId?: string; fileName: string }) =>
+  default: ({
+    open,
+    fileId,
+    fileName,
+    sourceUrl,
+  }: {
+    open: boolean;
+    fileId?: string;
+    fileName: string;
+    sourceUrl?: string;
+  }) =>
     open ? (
-      <div data-testid="file-preview-dialog" data-file-id={fileId}>
+      <div data-testid="file-preview-dialog" data-file-id={fileId} data-source-url={sourceUrl}>
         {fileName}
       </div>
     ) : null,
@@ -107,6 +117,54 @@ describe('Citation', () => {
     fireEvent.click(fileButton);
 
     expect(screen.getByTestId('file-preview-dialog')).toHaveAttribute('data-file-id', 'file-123');
+  });
+
+  /* exode fork: clicking a knowledge-base citation with a `sourceUrl` (main's original-document
+   * URL — see useSearchResultsByTurn.ts) must still open the in-app preview dialog unchanged, but
+   * now with `sourceUrl` passed through so FilePreviewDialog can offer "open original". This
+   * pins the click behavior itself: no navigation, no `<a href>`, same dialog as before. */
+  it('passes sourceUrl through to the preview dialog without changing the click behavior', () => {
+    const searchResults = {
+      '0': {
+        references: [
+          {
+            attribution: 'Программа курса Python.pdf',
+            fileId: 'file-456',
+            fileName: 'Программа курса Python.pdf',
+            link: '#file-456',
+            sourceUrl: 'https://storage.exode.biz/staging/school/1798/doc.pdf',
+            metadata: { fileBytes: 2048, fileType: 'application/pdf' },
+            relevance: 0.9,
+            title: 'Программа курса Python.pdf',
+            type: 'file',
+          },
+        ],
+      },
+    };
+
+    renderWithProviders(
+      <CompositeCitation
+        node={{
+          properties: {
+            citationId: 'cite-3',
+            citations: [{ turn: 0, refType: 'file', index: 0 }],
+          },
+        }}
+      />,
+      searchResults as any,
+    );
+
+    const fileButton = screen.getByRole('button', { name: 'Программа курса Python.pdf' });
+    expect(
+      screen.queryByRole('link', { name: 'Программа курса Python.pdf' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(fileButton);
+
+    expect(screen.getByTestId('file-preview-dialog')).toHaveAttribute(
+      'data-source-url',
+      'https://storage.exode.biz/staging/school/1798/doc.pdf',
+    );
   });
 
   it('keeps standalone web citations as links', () => {

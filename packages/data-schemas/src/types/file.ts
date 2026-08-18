@@ -70,6 +70,12 @@ export interface IMongoFile extends Omit<Document, 'model'> {
      * derive the sessionKey explicitly.
      */
     codeEnvRef?: CodeEnvRef;
+    /**
+     * The exode fork: the original document's URL on exode's own storage, set at upload time
+     * for knowledge-base `file_search` files (see the schema field's own comment). Absent for
+     * every other file kind and for knowledge files uploaded before this field existed.
+     */
+    sourceUrl?: string;
   };
   expiresAt?: Date;
   expiredAt?: Date | null;
