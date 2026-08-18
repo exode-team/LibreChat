@@ -892,8 +892,12 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
       entity_id,
     });
 
-    // Vector status will be stored at root level, no need for metadata
-    fileInfoMetadata = {};
+    // Vector status is stored at root level. `source_url` is exode-specific: ms-ai's
+    // `upload_document` sends it as a plain form field alongside the file when the document has
+    // a known original location on main's storage (see exode-backend-ms-ai's
+    // modules/knowledge/librechat_client.py). Stamped onto `metadata.sourceUrl` so a citation can
+    // later hand the reader the authored original instead of only this extracted-text copy.
+    fileInfoMetadata = metadata.source_url ? { sourceUrl: metadata.source_url } : {};
   } else {
     // Standard single storage for non-RAG files
     const { handleFileUpload } = getStrategyFunctions(source);

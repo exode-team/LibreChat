@@ -619,6 +619,49 @@ describe('processAgentFileUpload', () => {
         }),
       );
     });
+
+    /* exode fork: a knowledge-base upload carries the original document's URL on main's own
+     * storage as the `source_url` form field (see exode-backend-ms-ai's
+     * modules/knowledge/librechat_client.py `upload_document`). It must land on
+     * `metadata.sourceUrl` so `fileSearch.js` can later hand a citation the real original
+     * instead of only this extracted-text copy. */
+    test('stamps source_url onto metadata.sourceUrl for file-search uploads', async () => {
+      setupStoredFileUpload();
+      const req = makeReq({ mimetype: 'text/plain', ocrConfig: null });
+
+      await processAgentFileUpload({
+        req,
+        res: mockRes,
+        metadata: {
+          ...makeMetadata(),
+          tool_resource: EToolResources.file_search,
+          source_url: 'https://storage.exode.biz/staging/school/1798/doc.pdf',
+        },
+      });
+
+      expect(db.createFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: { sourceUrl: 'https://storage.exode.biz/staging/school/1798/doc.pdf' },
+        }),
+        true,
+      );
+    });
+
+    test('omits metadata.sourceUrl when no source_url is sent', async () => {
+      setupStoredFileUpload();
+      const req = makeReq({ mimetype: 'text/plain', ocrConfig: null });
+
+      await processAgentFileUpload({
+        req,
+        res: mockRes,
+        metadata: { ...makeMetadata(), tool_resource: EToolResources.file_search },
+      });
+
+      expect(db.createFile).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata: {} }),
+        true,
+      );
+    });
   });
 
   /* Phase C / option α regression: the upload must persist its sandbox

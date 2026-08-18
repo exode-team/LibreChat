@@ -135,6 +135,14 @@ const file: Schema<IMongoFile> = new Schema(
         ),
         default: undefined,
       },
+      // The exode fork: a knowledge-base file_search upload is always LibreChat's OWN copy of a
+      // document's extracted text (see exode-backend-ms-ai's modules/knowledge README, "Filenames
+      // are the citation"). This carries the ORIGINAL document's URL on exode's storage, sent by
+      // ms-ai's `upload_document` as the `source_url` form field, so a citation can hand the reader
+      // the authored PDF/DOCX instead of only the plain-text extraction stored here.
+      sourceUrl: {
+        type: String,
+      },
     },
     expiresAt: {
       /* Short-lived upload TTL managed by MongoDB. This is separate from

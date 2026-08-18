@@ -25,6 +25,11 @@ interface FileCitationSource {
   relevance?: number;
   snippet?: string;
   title?: string;
+  /** exode fork: the original document's URL on main's own storage (see
+   *  useSearchResultsByTurn.ts and fileSearch.js's `sources` mapping). Passed to
+   *  `FilePreviewDialog` as an "open original" action alongside the in-app preview; absent for
+   *  files uploaded before this field existed. */
+  sourceUrl?: string;
 }
 
 function getFileCitationData(source?: FileCitationSource) {
@@ -38,6 +43,7 @@ function getFileCitationData(source?: FileCitationSource) {
     filePages: isFileType ? source.pages : undefined,
     fileRelevance: isFileType ? source.relevance : undefined,
     filePageRelevance: isFileType ? source.pageRelevance : undefined,
+    fileSourceUrl: isFileType ? source.sourceUrl : undefined,
   };
 }
 
@@ -103,8 +109,16 @@ export function CompositeCitation(props: CompositeCitationProps) {
   };
 
   const currentSource = sources[currentPage] as FileCitationSource;
-  const { isFileType, fileId, fileMeta, fileName, filePages, fileRelevance, filePageRelevance } =
-    getFileCitationData(currentSource);
+  const {
+    isFileType,
+    fileId,
+    fileMeta,
+    fileName,
+    filePages,
+    fileRelevance,
+    filePageRelevance,
+    fileSourceUrl,
+  } = getFileCitationData(currentSource);
 
   const handleFileClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -283,6 +297,7 @@ export function CompositeCitation(props: CompositeCitationProps) {
           pageRelevance={filePageRelevance}
           fileType={fileMeta?.fileType}
           fileSize={fileMeta?.fileBytes}
+          sourceUrl={fileSourceUrl}
         />
       )}
     </>
@@ -307,8 +322,16 @@ export function Citation(props: CitationComponentProps) {
     index: citation?.index || 0,
   }) as FileCitationSource | undefined;
 
-  const { isFileType, fileId, fileMeta, fileName, filePages, fileRelevance, filePageRelevance } =
-    getFileCitationData(refData);
+  const {
+    isFileType,
+    fileId,
+    fileMeta,
+    fileName,
+    filePages,
+    fileRelevance,
+    filePageRelevance,
+    fileSourceUrl,
+  } = getFileCitationData(refData);
 
   const [showPreview, setShowPreview] = useState(false);
 
@@ -359,6 +382,7 @@ export function Citation(props: CitationComponentProps) {
           pageRelevance={filePageRelevance}
           fileType={fileMeta?.fileType}
           fileSize={fileMeta?.fileBytes}
+          sourceUrl={fileSourceUrl}
         />
       )}
     </>

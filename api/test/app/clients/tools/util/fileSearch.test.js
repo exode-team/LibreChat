@@ -185,6 +185,55 @@ describe('fileSearch.js - tuple return validation', () => {
       expect(artifact.file_search.fileCitations).toBe(true);
     });
 
+    /* exode fork: `sourceUrl` (main's original-document URL, carried on the file record's
+     * `metadata.sourceUrl` — see file.ts and process.js) must reach the artifact's `sources`
+     * entry as `link` info so the client can offer an "open original" action, and must be
+     * omitted entirely when the file never had one (older files, non-knowledge-base uploads). */
+    it('carries sourceUrl through to the sources artifact when the file has one', async () => {
+      generateShortLivedToken.mockReturnValue('mock-jwt-token');
+      axios.post.mockResolvedValue({
+        data: [
+          [
+            { page_content: 'content', metadata: { source: '/path/to/doc.pdf' } },
+            0.1,
+          ],
+        ],
+      });
+
+      const fileSearchTool = await createFileSearchTool({
+        userId: 'user1',
+        files: [
+          {
+            file_id: 'file-1',
+            filename: 'doc.pdf',
+            sourceUrl: 'https://storage.exode.biz/staging/school/1798/doc.pdf',
+          },
+        ],
+      });
+
+      const [, artifact] = await fileSearchTool.func({ query: 'test query' });
+
+      expect(artifact.file_search.sources[0].sourceUrl).toBe(
+        'https://storage.exode.biz/staging/school/1798/doc.pdf',
+      );
+    });
+
+    it('omits sourceUrl from the sources artifact when the file has none', async () => {
+      generateShortLivedToken.mockReturnValue('mock-jwt-token');
+      axios.post.mockResolvedValue({
+        data: [[{ page_content: 'content', metadata: { source: '/path/to/doc.pdf' } }, 0.1]],
+      });
+
+      const fileSearchTool = await createFileSearchTool({
+        userId: 'user1',
+        files: [{ file_id: 'file-1', filename: 'doc.pdf' }],
+      });
+
+      const [, artifact] = await fileSearchTool.func({ query: 'test query' });
+
+      expect(artifact.file_search.sources[0]).not.toHaveProperty('sourceUrl');
+    });
+
     it('should handle multiple files correctly', async () => {
       generateShortLivedToken.mockReturnValue('mock-jwt-token');
 

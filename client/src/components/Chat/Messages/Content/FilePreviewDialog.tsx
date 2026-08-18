@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import copy from 'copy-to-clipboard';
 import { useRecoilValue } from 'recoil';
-import { Download } from 'lucide-react';
+import { Download, ExternalLink } from 'lucide-react';
 import { OGDialog, OGDialogContent, OGDialogTitle, OGDialogDescription } from '@librechat/client';
 import { useFileDownload, useSharedFileDownload } from '~/data-provider';
 import { logger, sortPagesByRelevance, triggerDownload } from '~/utils';
@@ -21,6 +21,11 @@ interface FilePreviewDialogProps {
   pageRelevance?: Record<number, number>;
   fileType?: string;
   fileSize?: number;
+  /** exode fork: the original document's URL on main's own storage — set only for
+   *  knowledge-base file_search citations that carry `metadata.sourceUrl` (see file.ts and
+   *  fileSearch.js). When present, offers an "open original" action alongside Download so the
+   *  reader can see the authored PDF/DOCX instead of only this in-app extracted-text preview. */
+  sourceUrl?: string;
 }
 
 function getFileExtension(filename: string): string {
@@ -136,6 +141,7 @@ export default function FilePreviewDialog({
   pageRelevance,
   fileType,
   fileSize,
+  sourceUrl,
 }: FilePreviewDialogProps) {
   const localize = useLocalize();
   const user = useRecoilValue(store.user);
@@ -279,6 +285,18 @@ export default function FilePreviewDialog({
             <OGDialogDescription className="min-w-0 truncate">
               {metaParts.join(' · ')}
             </OGDialogDescription>
+            {sourceUrl && (
+              <a
+                href={sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex shrink-0 items-center gap-1 text-xs text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy"
+                aria-label={`${localize('com_ui_open_original')} ${fileName}`}
+              >
+                <ExternalLink className="size-3" aria-hidden="true" />
+                {localize('com_ui_open_original')}
+              </a>
+            )}
             {fileId && (
               <button
                 type="button"
