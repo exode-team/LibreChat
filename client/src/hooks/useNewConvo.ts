@@ -35,7 +35,7 @@ import {
   logger,
 } from '~/utils';
 import { useDeleteFilesMutation, useGetEndpointsQuery, useGetStartupConfig } from '~/data-provider';
-import { useExodeAgentId } from '~/components/Exode';
+import { useExodeAgentId, scopeConversationToExodeAgent } from '~/components/Exode';
 import useGetConversation from './Conversations/useGetConversation';
 import useAssistantListMap from './Assistants/useAssistantListMap';
 import { useResetChatBadges } from './useChatBadges';
@@ -219,6 +219,13 @@ const useNewConvo = (index = 0) => {
         if (disableParams === true) {
           conversation.disableParams = true;
         }
+
+        /**
+         * The default convo just built above knows nothing about the exode embed's agent — only
+         * the URL did, and only ChatRoute's once-per-load query-param pass ever read it. Without
+         * this every "New chat" in the embed would send with no `agent_id` and be rejected.
+         */
+        scopeConversationToExodeAgent(conversation, latchedExodeAgentId);
 
         if (!(keepAddedConvos ?? false)) {
           clearAllConversations(true);
