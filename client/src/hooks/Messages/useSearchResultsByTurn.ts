@@ -9,7 +9,7 @@ interface FileSource {
   relevance?: number;
   pageRelevance?: Record<string, number>;
   metadata?: any;
-  /** exode fork: the original document's URL on main's own storage, when the file that produced
+  /** exode fork: the original document's URL in exode storage, when the file that produced
    *  this source carried one (see fileSearch.js's `sources` mapping). */
   sourceUrl?: string;
 }
