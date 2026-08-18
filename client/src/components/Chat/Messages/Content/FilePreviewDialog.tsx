@@ -33,6 +33,27 @@ function getFileExtension(filename: string): string {
   return dot > 0 ? filename.slice(dot + 1).toLowerCase() : '';
 }
 
+// exode fork: `sourceUrl` traces back to an upload-time form field an uploader controls
+// (ms-ai's `upload_document` -> LibreChat's `metadata.sourceUrl`, see file.ts). It is interpolated
+// directly into an `<a href>` below, so an unvalidated `javascript:`/`data:` value would be a
+// clickable XSS vector. The server already drops anything unsafe when it stamps the field
+// (process.js's `sanitizeSourceUrl`), but a stored value must never be trusted at the render
+// boundary either — parse and re-check the scheme here too, and render nothing if it fails.
+const ALLOWED_SOURCE_URL_PROTOCOLS = new Set(['http:', 'https:']);
+
+function getSafeExternalUrl(url?: string): string | undefined {
+  if (!url) {
+    return undefined;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return undefined;
+  }
+  return ALLOWED_SOURCE_URL_PROTOCOLS.has(parsed.protocol) ? parsed.href : undefined;
+}
+
 function canPreviewByMime(mime?: string): 'pdf' | 'text' | false {
   if (!mime) {
     return false;
@@ -261,6 +282,7 @@ export default function FilePreviewDialog({
     () => (pages && pageRelevance ? sortPagesByRelevance(pages, pageRelevance) : pages),
     [pages, pageRelevance],
   );
+  const safeSourceUrl = useMemo(() => getSafeExternalUrl(sourceUrl), [sourceUrl]);
 
   const metaParts: string[] = [displayType];
   if (relevance != null && relevance > 0) {
@@ -285,9 +307,9 @@ export default function FilePreviewDialog({
             <OGDialogDescription className="min-w-0 truncate">
               {metaParts.join(' · ')}
             </OGDialogDescription>
-            {sourceUrl && (
+            {safeSourceUrl && (
               <a
-                href={sourceUrl}
+                href={safeSourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex shrink-0 items-center gap-1 text-xs text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy"

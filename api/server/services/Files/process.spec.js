@@ -657,10 +657,33 @@ describe('processAgentFileUpload', () => {
         metadata: { ...makeMetadata(), tool_resource: EToolResources.file_search },
       });
 
-      expect(db.createFile).toHaveBeenCalledWith(
-        expect.objectContaining({ metadata: {} }),
-        true,
-      );
+      expect(db.createFile).toHaveBeenCalledWith(expect.objectContaining({ metadata: {} }), true);
+    });
+
+    /* `source_url` is a request field an uploader controls, and it ends up interpolated into an
+     * `<a href>` on the client (FilePreviewDialog's "Open original"). Unvalidated, a
+     * `javascript:`/`data:` value stamped onto metadata.sourceUrl would be a stored XSS payload
+     * that fires for anyone who opens that citation later. */
+    test.each([
+      'javascript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'not a url at all',
+      'file:///etc/passwd',
+    ])('drops an unsafe source_url (%s)', async (unsafeUrl) => {
+      setupStoredFileUpload();
+      const req = makeReq({ mimetype: 'text/plain', ocrConfig: null });
+
+      await processAgentFileUpload({
+        req,
+        res: mockRes,
+        metadata: {
+          ...makeMetadata(),
+          tool_resource: EToolResources.file_search,
+          source_url: unsafeUrl,
+        },
+      });
+
+      expect(db.createFile).toHaveBeenCalledWith(expect.objectContaining({ metadata: {} }), true);
     });
   });
 

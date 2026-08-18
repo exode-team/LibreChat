@@ -69,6 +69,26 @@ const createSanitizedUploadWrapper = (uploadFunction) => {
 
 const hasCodeEnvRef = (file) => file?.metadata?.codeEnvRef != null;
 
+// exode fork: `source_url` (the original document's URL on main's storage — see the
+// `EToolResources.file_search` branch below) is a user-controlled upload-time form field that
+// ends up interpolated into an `<a href>` on the client (FilePreviewDialog's "Open original").
+// Unvalidated, `javascript:`/`data:`/any other scheme becomes a clickable XSS vector the moment
+// someone opens that citation. Same allow-list pattern as `avatar.js`'s `ALLOWED_AVATAR_PROTOCOLS`.
+const ALLOWED_SOURCE_URL_PROTOCOLS = new Set(['http:', 'https:']);
+
+function sanitizeSourceUrl(url) {
+  if (typeof url !== 'string' || url.length === 0) {
+    return undefined;
+  }
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return undefined;
+  }
+  return ALLOWED_SOURCE_URL_PROTOCOLS.has(parsed.protocol) ? parsed.href : undefined;
+}
+
 const isMissingStorageError = (err) => {
   const code = err?.code ?? err?.status ?? err?.statusCode ?? err?.response?.status;
   if ([404, '404', 'ENOENT', 'NoSuchKey', 'NotFound', 'ResourceNotFound'].includes(code)) {
@@ -897,7 +917,15 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
     // a known original location on main's storage (see exode-backend-ms-ai's
     // modules/knowledge/librechat_client.py). Stamped onto `metadata.sourceUrl` so a citation can
     // later hand the reader the authored original instead of only this extracted-text copy.
-    fileInfoMetadata = metadata.source_url ? { sourceUrl: metadata.source_url } : {};
+    // Sanitized first: it is a user-controlled request field that ends up in an `<a href>` on
+    // the client, so an unvalidated `javascript:`/`data:` value would be a stored XSS vector.
+    const sanitizedSourceUrl = sanitizeSourceUrl(metadata.source_url);
+    if (metadata.source_url && !sanitizedSourceUrl) {
+      logger.warn(
+        `[processAgentFileUpload] Dropping unsafe source_url for file_search upload: ${metadata.source_url}`,
+      );
+    }
+    fileInfoMetadata = sanitizedSourceUrl ? { sourceUrl: sanitizedSourceUrl } : {};
   } else {
     // Standard single storage for non-RAG files
     const { handleFileUpload } = getStrategyFunctions(source);

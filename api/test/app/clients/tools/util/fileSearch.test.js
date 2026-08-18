@@ -192,12 +192,7 @@ describe('fileSearch.js - tuple return validation', () => {
     it('carries sourceUrl through to the sources artifact when the file has one', async () => {
       generateShortLivedToken.mockReturnValue('mock-jwt-token');
       axios.post.mockResolvedValue({
-        data: [
-          [
-            { page_content: 'content', metadata: { source: '/path/to/doc.pdf' } },
-            0.1,
-          ],
-        ],
+        data: [[{ page_content: 'content', metadata: { source: '/path/to/doc.pdf' } }, 0.1]],
       });
 
       const fileSearchTool = await createFileSearchTool({

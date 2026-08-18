@@ -155,7 +155,9 @@ describe('Citation', () => {
     );
 
     const fileButton = screen.getByRole('button', { name: 'Программа курса Python.pdf' });
-    expect(screen.queryByRole('link', { name: 'Программа курса Python.pdf' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Программа курса Python.pdf' }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(fileButton);
 
